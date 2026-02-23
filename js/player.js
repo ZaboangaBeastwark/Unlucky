@@ -577,12 +577,38 @@ function renderCharacterSheet(char, container) {
         attrHtml += `<div class="attr-box"><span class="attr-label">${k.substring(0, 3).toUpperCase()}</span><span class="attr-val">${v > 0 ? '+' + v : v}</span></div>`;
     }
 
-    let expHtml = char.experiences.map(e => `<div>${e.name || 'Nenhuma'} <strong style="color:var(--accent-gold);">+${e.value}</strong></div>`).join('');
+    let expHtml = char.experiences.map(e => `<div style="margin-bottom:0.5rem; display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); padding:0.5rem; border-radius:4px;"><span>${e.name || 'Nenhuma'}</span> <strong style="color:var(--accent-gold); font-size:1.1rem;">+${e.value}</strong></div>`).join('');
+
+    // Gold Formatting Helper (Daggerheart Abstraction)
+    const formatGold = (amount) => {
+        if (!amount || amount === 0) return '0 (Nenhum trocado)';
+        let chests = Math.floor(amount / 100);
+        let bags = Math.floor((amount % 100) / 10);
+        let handfuls = amount % 10;
+        let p = [];
+        if (chests > 0) p.push(`${chests} Baú${chests > 1 ? 's' : ''}`);
+        if (bags > 0) p.push(`${bags} Saco${bags > 1 ? 's' : ''}`);
+        if (handfuls > 0) p.push(`${handfuls} Punhado${handfuls > 1 ? 's' : ''}`);
+        return p.join(' e ') + ` <span style="font-size:0.75rem; color:var(--text-muted);">(${amount})</span>`;
+    };
 
     // Basic Inventory
-    let invHtml = `<div style="margin-bottom:1rem;">Ouro: <span style="color:#f1c40f;font-weight:bold;">${char.inventory.gold}</span></div><p><strong>Equipado:</strong></p><ul style="list-style:none; padding:0; margin-bottom:1rem;">`;
+    let invHtml = `<div style="margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center; background:rgba(241,196,15,0.1); padding:0.8rem; border-left:3px solid #f1c40f; border-radius:4px;">
+        <span style="font-weight:bold;">Ouro Carregado:</span>
+        <span style="display:flex; align-items:center; gap:0.5rem;">
+            <button class="btn btn-sm" onclick="alert('TODO: Diminuir Ouro')" style="padding:0.2rem 0.5rem;">-</button>
+            <span style="color:#f1c40f;font-weight:bold; width: 120px; text-align: center;">${char.inventory.gold || 0}g <br><span style="font-size:0.65rem">${formatGold(char.inventory.gold)}</span></span>
+            <button class="btn btn-sm" onclick="alert('TODO: Aumentar Ouro')" style="padding:0.2rem 0.5rem;">+</button>
+        </span>
+    </div>
+    <p style="color:var(--accent-gold); font-weight:bold; margin-bottom:0.5rem;">Carga Equipada:</p>
+    <div style="display:flex; gap:0.5rem; margin-bottom:1.5rem; flex-wrap:wrap;">`;
+
     if (char.inventory.equipped.length) {
-        char.inventory.equipped.forEach(i => invHtml += `<li style="margin-bottom:0.5rem;"><i class="fas fa-dot-circle" style="color:var(--accent-gold); font-size:0.5rem; margin-right:5px;"></i> ${i.name}</li>`);
+        char.inventory.equipped.forEach(i => {
+            const detailsStr = encodeURIComponent(JSON.stringify(i));
+            invHtml += `<button class="btn btn-primary" onclick="showItemDetails('${detailsStr}')" style="padding:0.5rem 1rem; font-size:0.85rem;"><i class="fas fa-hand-holding-medical" style="margin-right:5px;"></i> ${i.name}</button>`;
+        });
     }
     invHtml += `</ul><p><strong>Mochila:</strong></p><ul style="list-style:none; padding:0;">`;
     if (char.inventory.bag.length) {
@@ -630,26 +656,40 @@ function renderCharacterSheet(char, container) {
                 <div class="glass-panel sheet-section">
                     <h3>Recursos Combatíveis</h3>
                     <div class="resource-row">
-                        <span>Evasão</span>
+                        <span>Evasão Total</span>
                         <span class="res-val highlight-gold">${char.evasion_current_override ?? char.evasion_base}</span>
                     </div>
                     <div class="resource-row">
-                        <span>Armadura (Slot/PA Base)</span>
+                        <span>Armadura (Slot / PA Base)</span>
                         <span class="res-val" style="color:#e78c3c;">${char.armor_slots} / ${char.armor_base}</span>
                     </div>
-                    <div class="resource-row">
-                        <span>Pontos de Vida</span>
-                        <div class="pv-circles">
+                    
+                    <hr style="border-color:rgba(255,255,255,0.1); margin:1.5rem 0;">
+                    
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                        <span style="font-weight:bold; color:var(--accent-gold);">Pontos de Vida (PV)</span>
+                        <div class="pv-circles" style="cursor:pointer;" onclick="alert('TODO: Implementar dano ajustável')">
                             ${Array.from({ length: char.hp_base }, (_, i) => `<div class="pv-circle ${i < char.hp_current ? 'filled' : ''}"></div>`).join('')}
                         </div>
                     </div>
+                    
+                    <!-- NEW DAMAGE THRESHOLDS -->
+                    <div style="margin-bottom: 1.5rem; background:rgba(231,76,60,0.1); padding:0.8rem; border-radius:4px; border:1px solid rgba(231,76,60,0.3);">
+                        <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.5rem; text-align:center;">LIMIARES DE DANO DA CLASSE</div>
+                        <div style="display:flex; justify-content:space-around; text-align:center;">
+                            <div><b style="color:#95a5a6;">Menor</b><br><span style="font-size:1.2rem;">${DH_CLASSES_DATA[char.class]?.thresholds[0] || '?'}</span></div>
+                            <div><b style="color:#e67e22;">Maior</b><br><span style="font-size:1.2rem;">${DH_CLASSES_DATA[char.class]?.thresholds[1] || '?'}</span></div>
+                            <div><b style="color:#e74c3c;">Severo</b><br><span style="font-size:1.2rem;">${DH_CLASSES_DATA[char.class]?.thresholds[2] || '?'}</span></div>
+                        </div>
+                    </div>
+
                     <div class="resource-row">
-                        <span>Esperança</span>
-                        <span class="res-val highlight-gold">${char.hope_current} / 6</span>
+                        <span style="font-weight:bold; color:#3498db;">Esperança (Hope)</span>
+                        <span class="res-val" style="color:#3498db; cursor:pointer;" onclick="alert('TODO: Incrementar Esperança')">${char.hope_current} / 6</span>
                     </div>
                     <div class="resource-row">
-                        <span>Fadiga (Stress)</span>
-                        <div class="pv-circles">
+                        <span style="font-weight:bold; color:#e74c3c;">Fadiga (Stress)</span>
+                        <div class="pv-circles" style="cursor:pointer;" onclick="alert('TODO: Adicionar Fadiga')">
                            ${Array.from({ length: 6 }, (_, i) => `<div class="pv-circle stress-circle ${i < char.stress_current ? 'filled-stress' : ''}"></div>`).join('')}
                         </div>
                     </div>
@@ -663,6 +703,73 @@ function renderCharacterSheet(char, container) {
         </div>
     `;
 }
+
+// -------------------------------------------------------------
+// Interactive Inventory Modal (Player View)
+// -------------------------------------------------------------
+window.showItemDetails = function (encodedItem) {
+    const item = JSON.parse(decodeURIComponent(encodedItem));
+    const d = item.details || {};
+
+    // Check if modal container exists, if not create it
+    let modal = document.getElementById('dh-item-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'dh-item-modal';
+        modal.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center;
+            z-index: 10000; font-family: 'DM Sans', sans-serif;
+        `;
+        document.body.appendChild(modal);
+    }
+
+    let contentHtml = '';
+    if (d.type === 'Melee' || d.type === 'Ranged' || d.type === 'Magic') {
+        contentHtml = `
+            <div style="color:var(--accent-gold); font-size:0.9rem; margin-bottom:1rem; text-transform:uppercase; tracking:2px;">Arma // ${d.type}</div>
+            <div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:0.5rem; margin-bottom:0.5rem;">
+                <b>Dano:</b> <span style="color:#e74c3c; font-weight:bold;">${d.dmg}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:0.5rem; margin-bottom:0.5rem;">
+                <b>Mãos Ocupadas:</b> <span>${d.hands}</span>
+            </div>
+            ${d.range ? `<div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:0.5rem; margin-bottom:0.5rem;">
+                <b>Alcance:</b> <span>${d.range}</span>
+            </div>` : ''}
+            <div style="margin-top:1rem; padding:0.8rem; background:rgba(255,255,255,0.05); border-radius:4px;">
+                <b style="color:#3498db; display:block; margin-bottom:0.3rem;">Traços Especiais:</b>
+                <span style="font-size:0.85rem; color:var(--text-muted);">${d.traits || 'Nenhum'}</span>
+            </div>
+        `;
+    } else {
+        contentHtml = `
+            <div style="color:#e78c3c; font-size:0.9rem; margin-bottom:1rem; text-transform:uppercase; tracking:2px;">Armadura</div>
+            <div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:0.5rem; margin-bottom:0.5rem;">
+                <b>Valor Base da Armadura:</b> <span style="color:#e78c3c; font-weight:bold;">${d.armor_base}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:0.5rem; margin-bottom:0.5rem;">
+                <b>Slots Máximos para Riscar:</b> <span>${d.slots}</span>
+            </div>
+            ${d.evasion_mod ? `<div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:0.5rem; margin-bottom:0.5rem;">
+                <b>Modificador de Evasão:</b> <span style="color:var(--accent-gold); font-weight:bold;">${d.evasion_mod > 0 ? '+' + d.evasion_mod : d.evasion_mod}</span>
+            </div>` : ''}
+            <div style="margin-top:1rem; padding:0.8rem; background:rgba(255,255,255,0.05); border-radius:4px;">
+                <b style="color:#3498db; display:block; margin-bottom:0.3rem;">Regras de Defesa:</b>
+                <span style="font-size:0.85rem; color:var(--text-muted);">Quando atingido por um dano, você pode riscar um dos ${d.slots} slots disponíveis para bloquear ${d.armor_base} de dano instantaneamente. Evasão Base impacta quão difícil você é de ser acertado passivamente.</span>
+            </div>
+        `;
+    }
+
+    modal.innerHTML = `
+        <div class="glass-panel" style="width: 400px; max-width: 90%; position: relative; padding: 2rem;">
+            <button onclick="document.getElementById('dh-item-modal').style.display='none'" style="position:absolute; top:1rem; right:1rem; background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;">&times;</button>
+            <h2 style="font-family:'Crimson Text', serif; margin-bottom:0.5rem; text-align:center;">${item.name}</h2>
+            ${contentHtml}
+        </div>
+    `;
+    modal.style.display = 'flex';
+};
 
 // -------------------------------------------------------------
 // Core Initialization Call

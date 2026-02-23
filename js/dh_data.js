@@ -91,6 +91,7 @@ const DH_DOMAIN_CARDS_LVL1 = [
 
 const DH_CLASSES_DATA = {
     'Bardo': {
+        hp: 6, thresholds: [4, 9, 14],
         domains: ['Graça', 'Códice'],
         text: 'Artistas e contadores de histórias que fortalecem aliados com palavras e magia. A Fundação de sua Classe diz: A cada dia que se aproxima do perigo, você canaliza a magia para cantar o mundo à perfeição. Role o Dado de Bardo para garantir vantagem aos seus companheiros!',
         roleplay_questions: [
@@ -103,6 +104,7 @@ const DH_CLASSES_DATA = {
         }
     },
     'Druida': {
+        hp: 6, thresholds: [5, 10, 15],
         domains: ['Sábio', 'Arcano'],
         text: 'Moldam tempestades e falam através do aspecto indômito. Como um metamorfo do Círculo, os Druidas de Daggerheart focam na forma Bestial, garantindo Ataques Ferrenhos baseados em garras enquanto mantêm resistência natural impressionante.',
         roleplay_questions: [
@@ -115,6 +117,7 @@ const DH_CLASSES_DATA = {
         }
     },
     'Feiticeiro': {
+        hp: 6, thresholds: [4, 9, 14],
         domains: ['Arcano', 'Coragem'],
         text: 'A magia dos feiticeiros é imprevisível e devastadora. Enquanto outros conjuradores estudam feitiços ou comungam com a natureza, a magia de um feiticeiro corre em suas veias como radiação do caos e tempestade pulsantes.',
         roleplay_questions: [
@@ -127,6 +130,7 @@ const DH_CLASSES_DATA = {
         }
     },
     'Guardião': {
+        hp: 6, thresholds: [6, 11, 16],
         domains: ['Osso', 'Esplendor'],
         text: 'Defensores formidáveis que protegem seus companheiros na linha de frente. Um Guardião entra no frenesi do escudo, chamando toda a agressão adversária para si e cobrando com vida o custo do dever sagrado.',
         roleplay_questions: [
@@ -139,6 +143,7 @@ const DH_CLASSES_DATA = {
         }
     },
     'Guerreiro': {
+        hp: 6, thresholds: [5, 10, 15],
         domains: ['Lâmina', 'Osso'],
         text: 'Mestres de armamento e domínio da guerra tática. Você rola dados multiplicados quando empunha estilos de esgrima superiores, rasgando couro e placas adversárias através de pura força e aço afiado.',
         roleplay_questions: [
@@ -151,6 +156,7 @@ const DH_CLASSES_DATA = {
         }
     },
     'Ladino': {
+        hp: 6, thresholds: [4, 9, 14],
         domains: ['Meia-noite', 'Graça'],
         text: 'Pária furtivo e exímio causador de dor em fraquezas. O Ladino em Daggerheart gasta Esperança para saltar entre Ocultamento, dobrando as faces nefastas de Sneak Attack garantindo dano fulminante se for ignorado pelos monstros grandes.',
         roleplay_questions: [
@@ -163,6 +169,7 @@ const DH_CLASSES_DATA = {
         }
     },
     'Mago': {
+        hp: 6, thresholds: [3, 8, 13],
         domains: ['Arcano', 'Códice'],
         text: 'Os Magos gastam tempo da vida inteira decifrando segredos escondidos à vista desarmada na teia da realidade. Portando Runas Arcanas, cada Mago arquiva sua Esperança em seu Tomo para desarmar armadilhas e alterar a probabilidade.',
         roleplay_questions: [
@@ -175,6 +182,7 @@ const DH_CLASSES_DATA = {
         }
     },
     'Patrulheiro': {
+        hp: 6, thresholds: [5, 10, 15],
         domains: ['Sábio', 'Lâmina'],
         text: 'Especialista em sobrevivência perigosa, espreita, armas ranged e parcerias duradouras com um companheiro bestial ou mira biônica. Sobrevive a danos e climas intensos muito melhor que um Ladino urbano.',
         roleplay_questions: [
@@ -187,6 +195,7 @@ const DH_CLASSES_DATA = {
         }
     },
     'Serafim': {
+        hp: 6, thresholds: [5, 10, 15],
         domains: ['Esplendor', 'Coragem'],
         text: 'Guerreiros da luz dotados das bênçãos do paraíso caído de Daggerheart. O Serafim entra nas linhas de combate com Asas Espirituais resplandecentes que conferem voo tático esgotante e garantindo cura miraculosa de toques fervorosos no ápice.',
         roleplay_questions: [

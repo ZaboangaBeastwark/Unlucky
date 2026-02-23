@@ -95,10 +95,39 @@ if ($method === 'GET') {
 
         $allowedFields = ['hp_current', 'stress_current', 'hope_current', 'evasion_current_override', 'armor_slots'];
         if (in_array($field, $allowedFields)) {
+            // Fetch current to increment/decrement safely
+            $stmt = $pdo->prepare("SELECT {$field} FROM characters WHERE id = ?");
+            $stmt->execute([$charId]);
+            $currentVal = (int) $stmt->fetchColumn();
+
+            $newVal = $currentVal + (int) $value;
+            // Prevent going below 0 for standard resources
+            if ($newVal < 0 && $field !== 'evasion_current_override')
+                $newVal = 0;
+
             $updateStmt = $pdo->prepare("UPDATE characters SET {$field} = ? WHERE id = ?");
-            $updateStmt->execute([$value, $charId]);
-            jsonResponse(['message' => 'Updated successfully']);
+            $updateStmt->execute([$newVal, $charId]);
+            jsonResponse(['message' => 'Updated successfully', 'new_value' => $newVal]);
         }
+
+        // Special handle for JSON Gold Update
+        if ($field === 'gold') {
+            $stmt = $pdo->prepare("SELECT inventory FROM characters WHERE id = ?");
+            $stmt->execute([$charId]);
+            $invStr = $stmt->fetchColumn();
+            $inv = json_decode($invStr, true);
+            if (!isset($inv['gold']))
+                $inv['gold'] = 0;
+
+            $inv['gold'] += (int) $value;
+            if ($inv['gold'] < 0)
+                $inv['gold'] = 0;
+
+            $uStmt = $pdo->prepare("UPDATE characters SET inventory = ? WHERE id = ?");
+            $uStmt->execute([json_encode($inv), $charId]);
+            jsonResponse(['message' => 'Gold updated successfully', 'new_value' => $inv['gold']]);
+        }
+
         jsonResponse(['error' => 'Invalid field'], 400);
     } elseif ($action === 'join_session') {
         $charId = $input['character_id'] ?? null;
