@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daggerheart RPG Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Inter:wght@300;400;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <div id="app">
+        <!-- Auth View -->
+        <main id="view-auth" class="view active glass-panel">
+            <div class="auth-container">
+                <h1 class="logo-text">Daggerheart</h1>
+                <p class="subtitle">Nexus de Aventura</p>
+
+                <div class="tabs">
+                    <button class="tab-btn active" data-target="login-form">Login</button>
+                    <button class="tab-btn" data-target="register-form">Registrar</button>
+                </div>
+
+                <form id="login-form" class="auth-form active">
+                    <div class="input-group">
+                        <label for="login-username">Usuário</label>
+                        <input type="text" id="login-username" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="login-password">Senha</label>
+                        <input type="password" id="login-password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Entrar no Sistema</button>
+                    <div class="error-msg" id="login-error"></div>
+                </form>
+
+                <form id="register-form" class="auth-form">
+                    <div class="input-group">
+                        <label for="reg-username">Usuário</label>
+                        <input type="text" id="reg-username" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="reg-password">Senha</label>
+                        <input type="password" id="reg-password" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="reg-role">Papel</label>
+                        <select id="reg-role">
+                            <option value="player">Jogador</option>
+                            <option value="gm">Mestre (GM)</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Criar Conta</button>
+                    <div class="error-msg" id="reg-error"></div>
+                </form>
+            </div>
+        </main>
+
+        <!-- Player View Strategy -->
+        <main id="view-player" class="view">
+            <header class="app-header glass-panel">
+                <div class="header-content">
+                    <h2 class="logo-text-small">Daggerheart - Modo Jogador</h2>
+                    <div class="user-info">
+                        <span id="player-username"></span>
+                        <button id="btn-logout-player" class="btn btn-outline">Sair</button>
+                    </div>
+                </div>
+            </header>
+            <div class="dashboard-content">
+                <!-- Content will be injected here via JS: Char Creation or PC Sheet -->
+                <div id="player-dynamic-area"></div>
+            </div>
+        </main>
+
+        <!-- GM View Strategy -->
+        <main id="view-gm" class="view">
+            <header class="app-header glass-panel gm-header">
+                <div class="header-content">
+                    <h2 class="logo-text-small">Daggerheart - Painel do Mestre</h2>
+                    <div class="user-info">
+                        <span id="gm-username"></span>
+                        <button id="btn-logout-gm" class="btn btn-outline">Sair</button>
+                    </div>
+                </div>
+            </header>
+            <div class="dashboard-content">
+                <div id="gm-dynamic-area"></div>
+            </div>
+        </main>
+        <!-- Global Log Panel -->
+        <aside id="action-log-panel" class="glass-panel" style="display:none;">
+            <h3>Registro de Ações</h3>
+            <div id="log-entries"></div>
+        </aside>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/dh_data.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/gm.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>
