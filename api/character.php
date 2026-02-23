@@ -14,20 +14,20 @@ $action = $_GET['action'] ?? '';
 
 if ($method === 'GET') {
     if ($action === 'mine') {
-        // Fetch current user's character. Assuming 1 char per user for this prototype.
-        $stmt = $pdo->prepare('SELECT * FROM characters WHERE user_id = ? LIMIT 1');
+        // Fetch all current user's characters
+        $stmt = $pdo->prepare('SELECT * FROM characters WHERE user_id = ?');
         $stmt->execute([$_SESSION['user_id']]);
-        $char = $stmt->fetch();
-        if ($char) {
+        $chars = $stmt->fetchAll();
+
+        foreach ($chars as &$char) {
             // Decode JSON fields
             $char['attributes'] = json_decode($char['attributes'], true);
             $char['inventory'] = json_decode($char['inventory'], true);
             $char['experiences'] = json_decode($char['experiences'], true);
             $char['cards'] = json_decode($char['cards'], true);
-            jsonResponse(['character' => $char]);
-        } else {
-            jsonResponse(['character' => null], 404);
         }
+
+        jsonResponse(['characters' => $chars]);
     } elseif ($action === 'campaigns') {
         // Fetch all active sessions that a player can request to join
         $stmt = $pdo->query('SELECT id, name FROM sessions ORDER BY created_at DESC');
@@ -138,9 +138,21 @@ if ($method === 'GET') {
         if (!$sStmt->fetch())
             jsonResponse(['error' => 'Sessão não encontrada'], 404);
 
-        $stmt = $pdo->prepare("UPDATE characters SET session_id = ?, session_status = 'pending' WHERE id = ? AND user_id = ?");
+        $stmt = $pdo->prepare('UPDATE characters SET session_id = ? WHERE id = ? AND user_id = ?');
         $stmt->execute([$sessionId, $charId, $_SESSION['user_id']]);
-        jsonResponse(['message' => 'Joined session as pending']);
+        jsonResponse(['message' => 'Requested to join session']);
+    } elseif ($action === 'delete') {
+        $charId = $input['character_id'] ?? null;
+
+        $stmt = $pdo->prepare('DELETE FROM characters WHERE id = ? AND user_id = ?');
+        $stmt->execute([$charId, $_SESSION['user_id']]);
+        if ($stmt->rowCount() > 0) {
+            jsonResponse(['message' => 'Personagem deletado com sucesso.']);
+        } else {
+            jsonResponse(['error' => 'Personagem não encontrado ou não autorizado.'], 404);
+        }
+    } else {
+        jsonResponse(['error' => 'Action POST not found'], 404);
     }
 }
 

@@ -42,22 +42,123 @@ let wizardState = {
 
 async function initPlayerView() {
     const container = document.getElementById('player-dynamic-area');
-    container.innerHTML = `<div class="glass-panel" style="padding: 2rem; text-align: center;">Carregando sua ficha...</div>`;
+    container.innerHTML = `<div class="glass-panel" style="padding: 2rem; text-align: center;">Carregando seus heróis...</div>`;
     try {
         const res = await apiCall('character.php?action=mine');
-        if (res.character) {
-            renderCharacterSheet(res.character, container);
+        if (res.characters) {
+            renderCharacterSelection(res.characters, container);
         } else {
-            renderCharacterWizard(container);
+            renderCharacterSelection([], container);
         }
     } catch (e) {
         if (e.status === 404 || e.message.includes('404')) {
-            renderCharacterWizard(container);
+            renderCharacterSelection([], container);
         } else {
-            container.innerHTML = `<div class="error-msg">Erro ao carregar personagem: ${e.message}</div>`;
+            container.innerHTML = `<div class="error-msg">Erro ao listar personagens: ${e.message}</div>`;
         }
     }
 }
+
+// ================= CHARACTER SELECTION ================= //
+window.renderCharacterSelection = function (chars, container) {
+    let listHtml = '';
+
+    if (chars.length === 0) {
+        listHtml = `<p style="color:var(--text-muted); text-align:center; padding: 2rem;">Você ainda não tem nenhum herói forjado.</p>`;
+    } else {
+        chars.forEach(c => {
+            const sessionText = c.session_id
+                ? `<b>Sessão Ativa:</b> #${c.session_id}`
+                : `<div style="margin-top:0.5rem; display:flex; gap:0.5rem; justify-content:flex-start;">
+                    <select id="char-session-select-${c.id}" style="padding:0.3rem; background:rgba(0,0,0,0.5); color:white; border:1px solid #3498db; border-radius:4px; max-width:200px;">
+                        <option value="">Carregando Campanhas...</option>
+                    </select>
+                    <button class="btn btn-sm" onclick="joinCampaign(${c.id})" style="background:#3498db; color:white; border:none; padding:0.3rem 0.5rem;">Vincular</button>
+                 </div>`;
+
+            // Note: In HTML onclick handlers, passing full stringified JSON objects can break quotes. 
+            // Saving it globally temporarily or passing raw ID and finding it is safer. 
+            // We'll pass the ID, and keep `chars` scoped.
+
+            listHtml += `
+                <div class="glass-panel" style="padding: 1.5rem; border:1px solid var(--accent-gold); margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+                    <div style="text-align:left;">
+                        <h3 style="color:var(--accent-gold); margin-bottom:0.2rem; font-family:'Crimson Text', serif; font-size:1.5rem;">${c.name}</h3>
+                        <div style="font-size:0.95rem; color:var(--text-muted); margin-bottom:0.5rem;">Nivel ${c.level} ${c.class} (${c.heritage})</div>
+                        <div style="font-size:0.9rem; color:#3498db;">
+                            ${sessionText}
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <!-- Embed the JSON in a data attribute to retrieve it cleanly, injected via event listener OR use window attached data -->
+                        <button class="btn btn-primary sheet-btn" data-char-id="${c.id}" style="padding:0.6rem 1.5rem; font-size:1.1rem;">Jogar Ficha <i class="fas fa-play" style="margin-left:5px; font-size:0.8rem;"></i></button>
+                        <button class="btn btn-outline" onclick="deleteCharacter(${c.id})" style="border-color:#e74c3c; color:#e74c3c; padding:0.6rem 1rem;"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    container.innerHTML = `
+        <div style="max-width:800px; margin:0 auto; text-align:center; padding-top:2rem;">
+            <h2 style="font-family:'Crimson Text', serif; color:var(--accent-gold); margin-bottom:2rem; font-size:2.2rem;">Salão dos Heróis</h2>
+            ${listHtml}
+            <div style="margin-top:3rem; padding-top:2rem; border-top:1px solid rgba(255,255,255,0.1);">
+                <button class="btn btn-primary" onclick="startCharacterCreation()" style="padding:0.8rem 2rem; font-size:1.1rem; box-shadow: 0 0 15px rgba(241,196,15,0.3);"><i class="fas fa-plus" style="margin-right:5px;"></i> Forjar Novo Herói</button>
+            </div>
+        </div>
+    `;
+
+    // Attach event listeners for the "Jogar Ficha" buttons to bypass JSON HTML quote issues
+    document.querySelectorAll('.sheet-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const cId = parseInt(e.currentTarget.getAttribute('data-char-id'));
+            const character = chars.find(c => c.id === cId);
+            if (character) {
+                openCharacterSheet(character);
+            }
+        });
+    });
+
+    // Load campaigns for dropdowns
+    const unassigned = chars.filter(c => !c.session_id);
+    if (unassigned.length > 0) {
+        apiCall('character.php?action=campaigns').then(res => {
+            unassigned.forEach(c => {
+                const sel = document.getElementById(`char-session-select-${c.id}`);
+                if (sel) {
+                    if (res.campaigns && res.campaigns.length > 0) {
+                        sel.innerHTML = '<option value="">-- Selecione a Campanha --</option>' +
+                            res.campaigns.map(camp => `<option value="${camp.id}">${camp.name}</option>`).join('');
+                    } else {
+                        sel.innerHTML = '<option value="">Nenhuma campanha online.</option>';
+                        sel.disabled = true;
+                    }
+                }
+            });
+        }).catch(err => console.error("Could not fetch campaigns for selection:", err));
+    }
+};
+
+window.openCharacterSheet = function (char) {
+    const container = document.getElementById('player-dynamic-area');
+    renderCharacterSheet(char, container);
+};
+
+window.startCharacterCreation = function () {
+    const container = document.getElementById('player-dynamic-area');
+    renderCharacterWizard(container);
+};
+
+window.deleteCharacter = async function (charId) {
+    if (!confirm("Tem certeza que deseja apagar permanentemente este herói? Essa ação é vitalícia.")) return;
+    try {
+        await apiCall('character.php?action=delete', 'POST', { character_id: charId });
+        initPlayerView(); // Reload selection
+    } catch (e) {
+        alert("Erro ao excluir herói: " + e.message);
+    }
+};
 
 // ================= WIZARD (8 STEPS) ================= //
 function renderCharacterWizard(container) {
@@ -631,8 +732,11 @@ function renderCharacterSheet(char, container) {
     container.innerHTML = `
         <div class="sheet-grid">
             <div class="sheet-col">
-                <div class="glass-panel sheet-section" style="text-align: center;">
-                    <h2 style="color: var(--accent-gold); margin-bottom: 0.5rem;">${char.name}</h2>
+                <div class="glass-panel sheet-section" style="text-align: center; position:relative;">
+                    <div style="position:absolute; top:1rem; left:1rem; cursor:pointer; color:var(--text-muted); font-size:1.5rem;" onclick="initPlayerView()" title="Voltar para Seleção de Heróis">
+                        <i class="fas fa-arrow-left"></i>
+                    </div>
+                    <h2 style="color: var(--accent-gold); margin-bottom: 0.5rem; margin-top:0.5rem;">${char.name}</h2>
                     <p style="color: var(--text-muted); font-size: 0.9rem;">
                         Level ${char.level} ${char.class} (${char.subclass})<br>
                         ${char.heritage}
@@ -662,7 +766,7 @@ function renderCharacterSheet(char, container) {
             : `<div id="campaign-join-block" style="text-align:center;">
                                  <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:1rem;">Seu herói ainda não entrou em uma campanha.</p>
                                  <div style="display:flex; gap:0.5rem; justify-content:center; align-items:center;">
-                                    <select id="char-session-select" style="padding:0.5rem; background:rgba(0,0,0,0.5); color:white; border:1px solid #3498db; border-radius:4px; flex-grow:1;">
+                                    <select id="char-session-select-${char.id}" style="padding:0.5rem; background:rgba(0,0,0,0.5); color:white; border:1px solid #3498db; border-radius:4px; flex-grow:1;">
                                         <option value="">Carregando Campanhas...</option>
                                     </select>
                                     <button class="btn btn-primary" onclick="joinCampaign(${char.id})" style="background:#3498db; color:white; border:none; padding:0.5rem 1rem;">Entrar</button>
@@ -735,7 +839,7 @@ function renderCharacterSheet(char, container) {
     // Fetch campaigns dynamically if player needs to join
     if (!char.session_id) {
         apiCall('character.php?action=campaigns').then(res => {
-            const sel = document.getElementById('char-session-select');
+            const sel = document.getElementById(`char-session-select-${char.id}`);
             if (sel) {
                 if (res.campaigns && res.campaigns.length > 0) {
                     sel.innerHTML = '<option value="">-- Selecione a Campanha --</option>' +
@@ -748,6 +852,7 @@ function renderCharacterSheet(char, container) {
         }).catch(err => console.error("Could not fetch campaigns:", err));
     }
 }
+
 
 // -------------------------------------------------------------
 // Interactive Inventory Modal (Player View)
@@ -828,7 +933,7 @@ window.updateResource = async function (charId, field, valueDelta) {
         });
         if (res.message) {
             // Re-render character sheet to show new values
-            initPlayerView();
+            openCharacterSheet(charId); // Changed from initPlayerView to openCharacterSheet
         }
     } catch (e) {
         alert('Erro ao atualizar recurso: ' + e.message);
@@ -836,7 +941,7 @@ window.updateResource = async function (charId, field, valueDelta) {
 };
 
 window.joinCampaign = async function (charId) {
-    const sil = document.getElementById('char-session-select');
+    const sil = document.getElementById(`char-session-select-${charId}`);
     if (!sil || !sil.value) {
         alert("Por favor, selecione uma campanha na lista.");
         return;
@@ -848,7 +953,7 @@ window.joinCampaign = async function (charId) {
             session_id: sil.value
         });
         if (res.message) {
-            alert('Campanha vinculada com sucesso! Aguarde o Mestre aprovar se necessário.');
+            alert('Campanha vinculada com sucesso! Aguarde o Mestre iniciar.');
             initPlayerView();
         }
     } catch (e) {
