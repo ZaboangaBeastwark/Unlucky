@@ -596,9 +596,9 @@ function renderCharacterSheet(char, container) {
     let invHtml = `<div style="margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center; background:rgba(241,196,15,0.1); padding:0.8rem; border-left:3px solid #f1c40f; border-radius:4px;">
         <span style="font-weight:bold;">Ouro Carregado:</span>
         <span style="display:flex; align-items:center; gap:0.5rem;">
-            <button class="btn btn-sm" onclick="alert('TODO: Diminuir Ouro')" style="padding:0.2rem 0.5rem;">-</button>
+            <button class="btn btn-sm" onclick="updateResource(${char.id}, 'gold', -1)" style="padding:0.2rem 0.5rem;">-</button>
             <span style="color:#f1c40f;font-weight:bold; width: 120px; text-align: center;">${char.inventory.gold || 0}g <br><span style="font-size:0.65rem">${formatGold(char.inventory.gold)}</span></span>
-            <button class="btn btn-sm" onclick="alert('TODO: Aumentar Ouro')" style="padding:0.2rem 0.5rem;">+</button>
+            <button class="btn btn-sm" onclick="updateResource(${char.id}, 'gold', 1)" style="padding:0.2rem 0.5rem;">+</button>
         </span>
     </div>
     <p style="color:var(--accent-gold); font-weight:bold; margin-bottom:0.5rem;">Carga Equipada:</p>
@@ -646,18 +646,43 @@ function renderCharacterSheet(char, container) {
                     <h3>Experiências</h3>
                     ${expHtml}
                 </div>
-                <div class="glass-panel sheet-section" style="margin-top: 2rem;">
-                    <h3 style="color:var(--accent-gold);">Inventário</h3>
-                    ${invHtml}
+                    <div class="glass-panel sheet-section" style="margin-top: 2rem;">
+                        <h3 style="color:var(--accent-gold);">Inventário</h3>
+                        ${invHtml}
+                    </div>
+
+                    <!-- NEW: CAMPAIGN LINKING -->
+                    <div class="glass-panel sheet-section" style="margin-top: 2rem; background: rgba(52, 152, 219, 0.05); border-color:#3498db;">
+                        <h3 style="color:#3498db;">Sessão de Jogo</h3>
+                        ${char.session_id
+            ? `<div style="text-align:center; padding:1rem;">
+                                 <strong style="font-size:1.1rem; color:white;">Ligado à Campanha!</strong>
+                                 <p style="color:var(--text-muted); font-size:0.9rem; margin-top:0.5rem;">(ID da Sessão: ${char.session_id})</p>
+                               </div>`
+            : `<div id="campaign-join-block" style="text-align:center;">
+                                 <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:1rem;">Seu herói ainda não entrou em uma campanha.</p>
+                                 <div style="display:flex; gap:0.5rem; justify-content:center; align-items:center;">
+                                    <select id="char-session-select" style="padding:0.5rem; background:rgba(0,0,0,0.5); color:white; border:1px solid #3498db; border-radius:4px; flex-grow:1;">
+                                        <option value="">Carregando Campanhas...</option>
+                                    </select>
+                                    <button class="btn btn-primary" onclick="joinCampaign(${char.id})" style="background:#3498db; color:white; border:none; padding:0.5rem 1rem;">Entrar</button>
+                                 </div>
+                               </div>`
+        }
+                    </div>
+
                 </div>
-            </div>
-            
-            <div class="sheet-col">
+                
+                <div class="sheet-col">
                 <div class="glass-panel sheet-section">
                     <h3>Recursos Combatíveis</h3>
                     <div class="resource-row">
                         <span>Evasão Total</span>
-                        <span class="res-val highlight-gold">${char.evasion_current_override ?? char.evasion_base}</span>
+                        <span style="display:flex; align-items:center; gap:0.5rem;">
+                            <button class="btn btn-sm" onclick="updateResource(${char.id}, 'evasion_current_override', -1)" style="padding:0 0.4rem; font-size:0.8rem">-</button>
+                            <span class="res-val highlight-gold">${char.evasion_current_override ?? char.evasion_base}</span>
+                            <button class="btn btn-sm" onclick="updateResource(${char.id}, 'evasion_current_override', 1)" style="padding:0 0.4rem; font-size:0.8rem">+</button>
+                        </span>
                     </div>
                     <div class="resource-row">
                         <span>Armadura (Slot / PA Base)</span>
@@ -668,7 +693,7 @@ function renderCharacterSheet(char, container) {
                     
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
                         <span style="font-weight:bold; color:var(--accent-gold);">Pontos de Vida (PV)</span>
-                        <div class="pv-circles" style="cursor:pointer;" onclick="alert('TODO: Implementar dano ajustável')">
+                        <div class="pv-circles" style="cursor:pointer;" title="Clique esquerdo para adicionar PV, direito para diminuir" oncontextmenu="event.preventDefault(); updateResource(${char.id}, 'hp_current', -1);" onclick="updateResource(${char.id}, 'hp_current', 1)">
                             ${Array.from({ length: char.hp_base }, (_, i) => `<div class="pv-circle ${i < char.hp_current ? 'filled' : ''}"></div>`).join('')}
                         </div>
                     </div>
@@ -685,11 +710,15 @@ function renderCharacterSheet(char, container) {
 
                     <div class="resource-row">
                         <span style="font-weight:bold; color:#3498db;">Esperança (Hope)</span>
-                        <span class="res-val" style="color:#3498db; cursor:pointer;" onclick="alert('TODO: Incrementar Esperança')">${char.hope_current} / 6</span>
+                        <span style="display:flex; align-items:center; gap:0.5rem;">
+                            <button class="btn btn-sm" onclick="updateResource(${char.id}, 'hope_current', -1)" style="padding:0 0.4rem; font-size:0.8rem">-</button>
+                            <span class="res-val" style="color:#3498db;">${char.hope_current} / 6</span>
+                            <button class="btn btn-sm" onclick="updateResource(${char.id}, 'hope_current', 1)" style="padding:0 0.4rem; font-size:0.8rem">+</button>
+                        </span>
                     </div>
                     <div class="resource-row">
                         <span style="font-weight:bold; color:#e74c3c;">Fadiga (Stress)</span>
-                        <div class="pv-circles" style="cursor:pointer;" onclick="alert('TODO: Adicionar Fadiga')">
+                        <div class="pv-circles" style="cursor:pointer;" title="Clique esquerdo para adicionar Stress, direito para diminuir" oncontextmenu="event.preventDefault(); updateResource(${char.id}, 'stress_current', -1);" onclick="updateResource(${char.id}, 'stress_current', 1)">
                            ${Array.from({ length: 6 }, (_, i) => `<div class="pv-circle stress-circle ${i < char.stress_current ? 'filled-stress' : ''}"></div>`).join('')}
                         </div>
                     </div>
@@ -702,6 +731,22 @@ function renderCharacterSheet(char, container) {
             </div>
         </div>
     `;
+
+    // Fetch campaigns dynamically if player needs to join
+    if (!char.session_id) {
+        apiCall('character.php?action=campaigns').then(res => {
+            const sel = document.getElementById('char-session-select');
+            if (sel) {
+                if (res.campaigns && res.campaigns.length > 0) {
+                    sel.innerHTML = '<option value="">-- Selecione a Campanha --</option>' +
+                        res.campaigns.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                } else {
+                    sel.innerHTML = '<option value="">Nenhuma campanha aberta...</option>';
+                    sel.disabled = true;
+                }
+            }
+        }).catch(err => console.error("Could not fetch campaigns:", err));
+    }
 }
 
 // -------------------------------------------------------------
@@ -769,6 +814,46 @@ window.showItemDetails = function (encodedItem) {
         </div>
     `;
     modal.style.display = 'flex';
+};
+
+// -------------------------------------------------------------
+// Core Interactive Handlers
+// -------------------------------------------------------------
+window.updateResource = async function (charId, field, valueDelta) {
+    try {
+        const res = await apiCall('character.php?action=update_resource', 'POST', {
+            character_id: charId,
+            field: field,
+            value: valueDelta
+        });
+        if (res.message) {
+            // Re-render character sheet to show new values
+            initPlayerView();
+        }
+    } catch (e) {
+        alert('Erro ao atualizar recurso: ' + e.message);
+    }
+};
+
+window.joinCampaign = async function (charId) {
+    const sil = document.getElementById('char-session-select');
+    if (!sil || !sil.value) {
+        alert("Por favor, selecione uma campanha na lista.");
+        return;
+    }
+
+    try {
+        const res = await apiCall('character.php?action=join_session', 'POST', {
+            character_id: charId,
+            session_id: sil.value
+        });
+        if (res.message) {
+            alert('Campanha vinculada com sucesso! Aguarde o Mestre aprovar se necessário.');
+            initPlayerView();
+        }
+    } catch (e) {
+        alert('Falha ao entrar na campanha: ' + e.message);
+    }
 };
 
 // -------------------------------------------------------------
