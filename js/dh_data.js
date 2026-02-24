@@ -93,118 +93,253 @@ const DH_CLASSES_DATA = {
     'Bardo': {
         hp: 6, thresholds: [4, 9, 14],
         domains: ['Graça', 'Códice'],
-        text: 'Artistas e contadores de histórias que fortalecem aliados com palavras e magia. A Fundação de sua Classe diz: A cada dia que se aproxima do perigo, você canaliza a magia para cantar o mundo à perfeição. Role o Dado de Bardo para garantir vantagem aos seus companheiros!',
+        text: 'Artistas e contadores de histórias que fortalecem aliados com palavras e magia. A Fundação de sua Classe diz: A cada dia que se aproxima do perigo, você canaliza a magia para cantar o mundo à perfeição.',
+        class_feat_name: 'Dado de Faceta',
+        class_feat_desc: 'Você tem um Dado de Faceta (d6). Quando um aliado falha em um teste, você pode gastar 1 de Esperança para rolar seu dado e adicionar o resultado ao total dele.',
+        hope_feat_name: 'Ato Final',
+        hope_feat_desc: 'Realize uma performance épica. Todos os aliados em alcance Próximo recuperam 2 PV ou 2 de Fadiga, e ganham Vantagem no próximo ataque.',
+        items: ['Instrumento musical', 'Adaga de Bardo', 'Roupas Elegantes'],
         roleplay_questions: [
             'Qual é a sua obra mais famosa e quem alega a autoria no seu lugar injustamente?',
             'Qual companheiro na mesa tem o segredo mais ridículo e você jurou transformá-lo em canção um dia?'
         ],
         subclasses: {
-            'Beletrista': 'O Beletrista transforma insultos cortantes em lâminas materiais, extraindo feitiços literários verbais que causam danos e diminuem os PM inimigos.',
-            'Trovador': 'Amigo das tavernas e dos bosques, o Trovador viaja levantando estandartes de confiança curativa no front de batalha.'
+            'Trovador': {
+                text: 'Amigo das tavernas e dos bosques, o Trovador viaja levantando estandartes de confiança curativa no front de batalha.',
+                fundamental: '(Inspiração Fluida): Sempre que rolar com Medo, você pode dar 1 de Esperança a um aliado.',
+                especializacao: '(Eco de Vitória): Quando um aliado usa seu Dado de Faceta e obtém sucesso, você recupera 1 de Esperança.',
+                maestria: '(Grande Maestro): Seu Dado de Faceta torna-se um d10.'
+            },
+            'Cunhador de Frases': {
+                text: 'O beletrista ou cunhador de frases transforma insultos cortantes em lâminas materiais, extraindo feitiços verbais.',
+                fundamental: '(Palavras Afiadas): Você pode usar Carisma para ataques mágicos à distância (Dano d8).',
+                especializacao: '(Sátira Mordaz): Ao causar dano a um inimigo, ele recebe Desvantagem no próximo ataque dele.',
+                maestria: '(Voz da Verdade): Seus ataques de Palavras Afiadas causam d12 de dano e podem atingir dois alvos.'
+            }
         }
     },
     'Druida': {
         hp: 6, thresholds: [5, 10, 15],
         domains: ['Sábio', 'Arcano'],
         text: 'Moldam tempestades e falam através do aspecto indômito. Como um metamorfo do Círculo, os Druidas de Daggerheart focam na forma Bestial, garantindo Ataques Ferrenhos baseados em garras enquanto mantêm resistência natural impressionante.',
+        class_feat_name: 'Forma Selvagem',
+        class_feat_desc: 'Gaste 1 de Esperança para se transformar. Escolha entre: Ágil (+Agilidade/Ataques rápidos), Feroz (+Força/Dano pesado) ou Resistente (+Vigor/Armadura).',
+        hope_feat_name: 'Comunhão Natural',
+        hope_feat_desc: 'Você se funde ao ambiente. Pode fazer 3 perguntas ao cenário ou controlar elementos naturais para imobilizar inimigos em alcance Curto por uma rodada.',
+        items: ['Cajado de Madeira', 'Foice de Ervas', 'Alforje de Sementes'],
         roleplay_questions: [
             'Qual forma animal se recusa teimosamente a ser dominada pelo seu espírito selvagem?',
             'O que o vilarejo local fez para ofender a selva e como eles te imploraram para apaziguá-la?'
         ],
         subclasses: {
-            'Protetor dos Elementos': 'Canaliza tornados e cascatas para manipular as linhas de frente arcanas.',
-            'Protetor da Renovação': 'Usa esporos e raízes que fecham as feridas terríveis dos companheiros caídos em combate.'
+            'Guardião do Bosque': {
+                text: 'Usa esporos e resistências do bosque que fecham feridas terríveis e blindam o corpo.',
+                fundamental: '(Vínculo Vital): Ao entrar em Forma Selvagem, recupere 1 de Fadiga.',
+                especializacao: '(Forma Elemental): Suas formas selvagens agora podem causar dano de Fogo, Gelo ou Raio.',
+                maestria: '(Espírito da Floresta): Enquanto transformado, você recupera 1 PV no início de cada um dos seus turnos.'
+            },
+            'Sábio Primal': {
+                text: 'Canaliza tornados e forças puras para manipular as magias e invocar espíritos antigos.',
+                fundamental: '(Magia da Terra): Você pode conjurar feitiços de Druida sem gastar Esperança se estiver em contato com solo natural.',
+                especializacao: '(Chamado da Matilha): Invoque espíritos animais que concedem Vantagem para você e aliados em alcance Próximo.',
+                maestria: '(Arquidruida): Você pode usar habilidades de suas formas selvagens mesmo em sua forma normal.'
+            }
         }
     },
     'Feiticeiro': {
         hp: 6, thresholds: [4, 9, 14],
         domains: ['Arcano', 'Coragem'],
-        text: 'A magia dos feiticeiros é imprevisível e devastadora. Enquanto outros conjuradores estudam feitiços ou comungam com a natureza, a magia de um feiticeiro corre em suas veias como radiação do caos e tempestade pulsantes.',
+        text: 'A magia dos feiticeiros é imprevisível e devastadora. Enquanto outros conjuradores estudam feitiços ou comungam com a natureza, a magia de um feiticeiro corre em suas veias como radiação do caos.',
+        class_feat_name: 'Fonte de Magia',
+        class_feat_desc: 'Você pode marcar Fadiga para adicionar +2 ao seu resultado de conjuração após a rolagem.',
+        hope_feat_name: 'Sobrecarga Arcaica',
+        hope_feat_desc: 'Libere uma explosão. Cause d12 de dano mágico a todos os inimigos em alcance Próximo e empurre-os para alcance Curto.',
+        items: ['Foco Arcano (Anel/Colar)', 'Adaga Cerimonial', 'Manto de Viagem'],
         roleplay_questions: [
             'Como seu último conjuramento selvagem de magia explodiu sem querer e causou uma tragédia?',
             'Que pacto ou herança esquecida te deu esse fogo interno de nascença?'
         ],
         subclasses: {
-            'Elementalista': 'Cria fluxos de calor congelantes, canalizando feitiços desastrosos elementais em área gigantesca.',
-            'Primordialista': 'Altera sua genética dracônica/fada em combate corpo-a-corpo monstruoso.'
+            'Origem Elemental': {
+                text: 'Cria fluxos focados da magia inata e canaliza feitiços devastadores de energia pura.',
+                fundamental: '(Sintonia de Elemento): Escolha um elemento; você ignora resistências de inimigos contra esse tipo de dano.',
+                especializacao: '(Manto Elemental): Inimigos que te atacam corpo a corpo sofrem d6 de dano do seu elemento.',
+                maestria: '(Cataclismo): Sua Sobrecarga Arcaica causa d20 de dano em vez de d12.'
+            },
+            'Origem Primal': {
+                text: 'Puxa magia dracônica ou caótica que se aproveita de instabilidades.',
+                fundamental: '(Sangue Mágico): Quando você sofre dano, ganha 1 de Esperança.',
+                especializacao: '(Mutação Súbita): Gaste Fadiga para ganhar voo, visão noturna ou garras por uma cena.',
+                maestria: '(Poder Absoluto): Uma vez por cena, você pode tratar uma falha de conjuração como um sucesso crítico.'
+            }
         }
     },
     'Guardião': {
-        hp: 6, thresholds: [6, 11, 16],
+        hp: 9, thresholds: [6, 11, 16],
         domains: ['Osso', 'Esplendor'],
-        text: 'Defensores formidáveis que protegem seus companheiros na linha de frente. Um Guardião entra no frenesi do escudo, chamando toda a agressão adversária para si e cobrando com vida o custo do dever sagrado.',
+        text: 'Defensores formidáveis que protegem seus companheiros na linha de frente. Um Guardião entra no frenesi do escudo, chamando a agressão para si.',
+        class_feat_name: 'Inabalável',
+        class_feat_desc: 'Se um aliado Próximo for atacado, você pode gastar 1 de Armadura para se tornar o alvo do ataque no lugar dele.',
+        hope_feat_name: 'Baluarte',
+        hope_feat_desc: 'Você cria uma zona defensiva. Por toda a cena, você e aliados Próximos recebem +3 em todos os Limiares de Dano.',
+        items: ['Escudo Grosso', 'Maça de Guerra', 'Kit de Primeiros Socorros'],
         roleplay_questions: [
             'Que ordem de cavalaria você traiu para seguir o caminho da aventura?',
             'Por que você ainda guarda na sua mochila o escudo furado de um herói anterior?'
         ],
         subclasses: {
-            'Baluarte': 'Verdadeiros castelos de metal caminhantes com Armadura Aprimorada e barreiras de contenção.',
-            'Vingador': 'Você se posiciona entre seus aliados e aqueles que lhes causariam mal, focado em revidar golpes de escudo esmagadores.'
+            'Vanguarda': {
+                text: 'Verdadeiros castelos de metal caminhantes com escudos e barreiras de contenção.',
+                fundamental: '(Provocação): Após atacar, o inimigo tem Desvantagem se tentar atacar qualquer pessoa que não seja você.',
+                especializacao: '(Escudo Refletor): Ao usar Inabalável e o ataque errar, o inimigo sofre d10 de dano físico.',
+                maestria: '(Indestrutível): Você ganha 2 espaços extras de Armadura permanentemente.'
+            },
+            'Castigador': {
+                text: 'Você se posiciona entre aliados focado em revidar golpes mortais como expiação.',
+                fundamental: '(Vingança): Quando você sofre dano, seu próximo ataque causa +d8 de dano.',
+                especializacao: '(Golpe Brutal): Seus ataques derrubam o inimigo em um sucesso com Esperança.',
+                maestria: '(Carrasco): Seus ataques contra inimigos feridos ignoram a Armadura deles.'
+            }
         }
     },
     'Guerreiro': {
-        hp: 6, thresholds: [5, 10, 15],
+        hp: 8, thresholds: [5, 10, 15],
         domains: ['Lâmina', 'Osso'],
-        text: 'Mestres de armamento e domínio da guerra tática. Você rola dados multiplicados quando empunha estilos de esgrima superiores, rasgando couro e placas adversárias através de pura força e aço afiado.',
+        text: 'Mestres de armamento e domínio da guerra tática. Rasgam couro e placas adversárias através de pura força e aço afiado.',
+        class_feat_name: 'Tática de Batalha',
+        class_feat_desc: 'Você possui Manobras. Ao rolar com Esperança em um ataque, você pode: Desarmar, Empurrar ou Derrubar o alvo sem gastar recursos extras.',
+        hope_feat_name: 'Fúria de Batalha',
+        hope_feat_desc: 'Entre em frenesi. Realize um ataque contra cada inimigo em alcance Corpo a Corpo com sua Proficiência máxima.',
+        items: ['Brigue de Couro Reforçado', 'Kit de Afiação', 'Bainha Ornamentada'],
         roleplay_questions: [
             'Quem roubou sua espada ancestral amaldiçoada de sua casa paterna?',
             'A que divindade de guerra você fez o Juramento das Três Cicatrizes Inquebráveis?'
         ],
         subclasses: {
-            'Escolhido da Bravura': 'Você lidera a carga no campo de batalha dando Vantagem Tática passiva ao redor.',
-            'Escolhido da Matança': 'Seu único objetivo é sangrar oponentes através da Fúria Vermelha focada em um Alvo primário.'
+            'Mestre das Armas': {
+                text: 'Lidera a precisão das formas perfeitas dos ataques com armas e maestria técnica.',
+                fundamental: '(Foco em Arma): Escolha um tipo de arma. Você recebe +1 em testes de ataque com ela.',
+                especializacao: '(Versatilidade): Você pode usar qualquer arma com Força ou Agilidade, independente do tipo intrínseco.',
+                maestria: '(Mestre do Combate): Você pode usar duas Manobras simultaneamente em um acerto com Esperança.'
+            },
+            'Matador': {
+                text: 'Seu único objetivo é sangrar oponentes através do foco incansável num alvo de matança.',
+                fundamental: '(Análise de Presa): Gaste 1 de Esperança para descobrir o Limiar de Dano de um inimigo alvo.',
+                especializacao: '(Sede de Sangue): Ao reduzir um inimigo a 0 PV, você recupera 1 de Fadiga ou 1 PV.',
+                maestria: '(Matador de Gigantes): Seus ataques causam +d12 de dano contra inimigos maiores que você.'
+            }
         }
     },
     'Ladino': {
         hp: 6, thresholds: [4, 9, 14],
         domains: ['Meia-noite', 'Graça'],
-        text: 'Pária furtivo e exímio causador de dor em fraquezas. O Ladino em Daggerheart gasta Esperança para saltar entre Ocultamento, dobrando as faces nefastas de Sneak Attack garantindo dano fulminante se for ignorado pelos monstros grandes.',
+        text: 'Pária furtivo e exímio causador de dor em fraquezas. O Ladino em Daggerheart acha brechas em Ocultamento.',
+        class_feat_name: 'Ataque Furtivo',
+        class_feat_desc: 'Se tiver Vantagem ou o inimigo estiver distraído, adicione d6 extras ao dano (aumenta com nível).',
+        hope_feat_name: 'Escapada Milagrosa',
+        hope_feat_desc: 'Desapareça das vistas. Você se move para qualquer lugar em alcance Distante sem ser detectado e seu próximo ataque tem Vantagem.',
+        items: ['Ferramentas de Ladrão', 'Dose de Veneno Básico', 'Capa Escura de Camuflar'],
         roleplay_questions: [
             'Qual membro da Guilda Púrpura ainda está cobrando uma divida absurda do seu passado?',
             'Qual aliado que te salvou da cadeia você não esperava gostar tanto como um irmão?'
         ],
         subclasses: {
-            'Gatuno': 'A fundição de sombras garante saltos e escaladas que ignoram os vetores de gravidade usuais de mapas de masmorras.',
-            'Mafioso': 'Contatos de rua fornecem suprimentos e subornos na hora certa. Além disso, Facadas com Venenos letais.'
+            'Assassino': {
+                text: 'Contatos de rua fornecem suprimentos cruéis e facadas com pontos de pressão letais.',
+                fundamental: '(Golpe de Misericórdia): Se o inimigo tiver apenas 1 PV restante, você o mata automaticamente sem rolar dados.',
+                especializacao: '(Lâmina Venenosa): Seus ataques furtivos causam dano persistente (1 PV por rodada) por 3 rodadas.',
+                maestria: '(Mestre das Sombras): Seu Ataque Furtivo agora usa d10 em vez de d6.'
+            },
+            'Andarilho da Noite': {
+                text: 'A fundição de sombras garante saltos e escaladas que ignoram e mistificam os arredores escuros.',
+                fundamental: '(Passo das Sombras): Você pode se teletransportar entre sombras em alcance Curto gastando 1 de Esperança.',
+                especializacao: '(Ilusão de Sombra): Crie um clone de sombra que dá Desvantagem aos ataques dos inimigos contra você.',
+                maestria: '(Forma Espectral): Você pode se tornar incorpóreo, atravessando paredes e ignorando dano físico por uma cena inteira.'
+            }
         }
     },
     'Mago': {
         hp: 6, thresholds: [3, 8, 13],
         domains: ['Arcano', 'Códice'],
-        text: 'Os Magos gastam tempo da vida inteira decifrando segredos escondidos à vista desarmada na teia da realidade. Portando Runas Arcanas, cada Mago arquiva sua Esperança em seu Tomo para desarmar armadilhas e alterar a probabilidade.',
+        text: 'Os Magos gastam tempo da vida inteira decifrando segredos escondidos à vista desarmada na teia da realidade. Portando sabedoria anciã.',
+        class_feat_name: 'Conjuração Precisa',
+        class_feat_desc: 'Se rolar Medo em conjuração, marque 1 de Fadiga para tratar o dado como se fosse o seu dado de Esperança (tornando-o crítico ou num sucesso limpo).',
+        hope_feat_name: 'Canalização Arcana',
+        hope_feat_desc: 'Escolha um feitiço conhecido. Lança com o dobro de dados de dano e atinge todos os alvos num raio Curto ao redor.',
+        items: ['Grimório', 'Túnicas de Estudioso', 'Estojo de Pena e Tintas de Runa'],
         roleplay_questions: [
-            'Que grimório lendário e censurado pelos Inquisidores você queimou antes mesmo de decorá-lo e por que você quer ler a continuação dele?',
+            'Que grimório lendário e censurado pelos Inquisidores você queimou antes de decorá-lo e por que você quer a continuação?',
             'Seu antigo mestre enlouqueceu. Como ele perdeu a cabeça?'
         ],
         subclasses: {
-            'Discípulo do Conhecimento': 'Vidente passivo das energias do plano da realidade; lê intenções mentais diretamente de humanoides.',
-            'Discípulo da Guerra': 'Cria campos de força defensivos com o grimório para bloquear mísseis no ar.'
+            'Discípulo do Conhecimento': {
+                text: 'Vidente passivo estudioso das energias puras de planos distantes da realidade mental.',
+                fundamental: '(Promissor): Você pode aprender um feitiço de qualquer outro domínio de magia ainda no nível 1.',
+                especializacao: '(Mente Analítica): Você pode usar Conhecimento em vez de Instinto ou Presença para testes sociais e resistências.',
+                maestria: '(Sábio Eterno): Pode conjurar feitiços de menor nível sem gastar Esperança ou aplicar Fadiga.'
+            },
+            'Mago de Guerra': {
+                text: 'Cria campos de força defensivos com o grimório e lança mísseis focados no conflito direto bélico.',
+                fundamental: '(Escudo Arcano): Quando você conjura um feitiço de poder, ganha +1 de Armadura temporariamente até o fim do seu turno.',
+                especializacao: '(Feitiço Perfurante): Suas magias de dano ignoram puramente resistências mágicas de couraça e barreiras mágicas.',
+                maestria: '(Aniquilação): Seus feitiços de dano causam um ferimento adicional (1 PV rasgado direto) se o alvo falhar em se desviar.'
+            }
         }
     },
     'Patrulheiro': {
-        hp: 6, thresholds: [5, 10, 15],
+        hp: 7, thresholds: [5, 10, 15],
         domains: ['Sábio', 'Lâmina'],
-        text: 'Especialista em sobrevivência perigosa, espreita, armas ranged e parcerias duradouras com um companheiro bestial ou mira biônica. Sobrevive a danos e climas intensos muito melhor que um Ladino urbano.',
+        text: 'Especialista em sobrevivência perigosa, espreita, armas ranged e parcerias duradouras indomáveis com ambientes.',
+        class_feat_name: 'Marca do Rastreador',
+        class_feat_desc: 'Como uma ação, escolha um inimigo. Você e seus aliados na cena têm +1 em ataques contra ele até ele morrer.',
+        hope_feat_name: 'Olho do Caçador',
+        hope_feat_desc: 'Você dispara um tiro impossível. O ataque acerta automaticamente, causa dano máximo do dado e ignora armadura pesada.',
+        items: ['Armadilhas Selvagens', 'Flauta de Chamariz Biônico', 'Corda Resistente de Vinha'],
         roleplay_questions: [
             'Que selva devorou seu grupo inteiro, revelando a futilidade das cidades da costa?',
-            'Seu companheiro animal detesta exatamente UM tipo específico de raça ou comida... o que e por quê?'
+            'Seu companheiro ou equipamento detesta um tipo de clima ou local: que local é esse e por quê?'
         ],
         subclasses: {
-            'Rastreador': 'Mestre definitivo contra um "Alvo Caçado" - não existe chance de esconderijo.',
-            'Treinador': 'Traz consigo um Parceiro Bestial de d8 de vida no painel tático como um personagem adicional operando nos seus comandos.'
+            'Rastreador': {
+                text: 'Mestre da perseguição ininterrupta. Nenhum alvo esgueira a sua atenção ou camuflagens naturais.',
+                fundamental: '(Caminho Livre): Você e seus aliados ignoram terreno difícil em natureza e previnem completamente emboscadas de estrada.',
+                especializacao: '(Disparo em Movimento): Você pode se mover as faixas de distância táticas e atacar na mesma ação perfeitamente.',
+                maestria: '(Horizonte Infinito): Seus alcances Longe saltam para alcance Muito Longe.'
+            },
+            'Mestre das Feras': {
+                text: 'Traz consigo parceiros bestiais espirituais criados a laço na selva mais mortal do continente.',
+                fundamental: '(Companheiro Animal): Um animal aliado ataca consigo na Iniciativa; possui PV equivalentes à metade de seu vigor de herói e se move.',
+                especializacao: '(Táticas de Alcateia): Você e seu companheiro bestial garantem Vantagens passivas quando almejam atacar e distrair a mesma fera.',
+                maestria: '(União Espiritual): Caso você ou sua fera caia morta, o remanescente em batalha recebe +10 de dano por fúria de tristeza e raiva.'
+            }
         }
     },
     'Serafim': {
         hp: 6, thresholds: [5, 10, 15],
         domains: ['Esplendor', 'Coragem'],
-        text: 'Guerreiros da luz dotados das bênçãos do paraíso caído de Daggerheart. O Serafim entra nas linhas de combate com Asas Espirituais resplandecentes que conferem voo tático esgotante e garantindo cura miraculosa de toques fervorosos no ápice.',
+        text: 'Guerreiros da luz dotados das bênçãos do paraíso caído. Mergulham na guerra tática sagrada em linha com divindades.',
+        class_feat_name: 'Intervenção Divina',
+        class_feat_desc: 'Você pode gastar pontos de Esperança para curar aliados (1 PV por ponto) se aproximar de tocar no alcance Muito Perto.',
+        hope_feat_name: 'Ascensão',
+        hope_feat_desc: 'Surgem asas efêmeras. Ganha Voo e emana aura de causar dano passivo em Inimigos Próximos e curar 1 PV de todos ao redor todo final de turno. Dura a cena.',
+        items: ['Pergaminhos de Oração Brancos', 'Aura (Símbolo Abençoado de Adoração)', 'Óleo Curativo Base'],
         roleplay_questions: [
             'Como foram cortadas suas asas originais por um alto clérigo celestial que te julgou imperfeito?',
             'Dentre o panteão dos antigos vivos, que deus sussurra para você quando reza de noite no fogo apagado?'
         ],
         subclasses: {
-            'Portador Divino': 'Lança magias e martelos ungidos à distância como clérigos bélicos imortais de linha de trás.',
-            'Sentinela Alada': 'Usa um Escudo Enorme pesado com ambas mãos que bloqueia fogo de dragões de campo a campo, com Voo Tático permanente ativado gastando Fadiga (Stress).'
+            'Sentinela Alada': {
+                text: 'Mártires bélicos que recebem investidas infernais para prevenir caídos profanos pelas cinzas dos fogos imortais.',
+                fundamental: '(Proteção Celestial): Quando você restaura saúde a alguém, a vontade sagrada instaura nela Escudos temporários extras de Armadura de Luz.',
+                especializacao: '(Golpe Radiante): Seus golpes em lutas trazem brilhos chamejantes divinos e somam luz cegante aos combates pesados.',
+                maestria: '(Anjo da Guarda): O primeiro golpe mortal num colega herói pode ser impedido no susto salvando sua colega de aventureiros do túmulo raso restando com 1 PV.'
+            },
+            'Oráculo': {
+                text: 'Converte preces passadas na clarividência tática. A divindade enxerga pelos olhos brancos ou vendados.',
+                fundamental: '(Visão Profética): No início da cena role 2d20 de oráculo para usar futuramente e subverter completamente acidentes indesejados reescrevendo as leis do Acerto e Falha.',
+                especializacao: '(Voz do Destino): Marque pontos de estafa para berrar com a Vontade Pura forçando medo existencial e rolamentos medíocres das Sombras.',
+                maestria: '(Revelação Divina): A intuição transcendental impossibilita surpresa no campo inimigo (Ambushes Falham) e revela intenções mentais absolutas de Mentirosos natos.'
+            }
         }
     }
 };

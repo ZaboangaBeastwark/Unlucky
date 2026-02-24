@@ -24,7 +24,7 @@ if ($method === 'GET') {
         }
 
         // Get characters in this session
-        $stmtChar = $pdo->prepare('SELECT id, name, class, subclass, level, hp_base, hp_current, stress_base, stress_current, evasion_base, evasion_current_override, hope_current, session_status FROM characters WHERE session_id = ?');
+        $stmtChar = $pdo->prepare('SELECT id, name, class, subclass, level, hp_base, hp_current, stress_base, stress_current, evasion_base, evasion_current_override, hope_current, session_status, secret_note FROM characters WHERE session_id = ?');
         $stmtChar->execute([$session['id']]);
         $characters = $stmtChar->fetchAll();
 

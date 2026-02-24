@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS characters (
     
     -- Armor and Thresholds
     armor_base INT DEFAULT 0,
+    armor_base_override INT DEFAULT NULL,
     armor_slots INT DEFAULT 0,
     threshold_minor INT DEFAULT 0,
     threshold_major INT DEFAULT 0,

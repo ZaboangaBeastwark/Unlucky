@@ -59,10 +59,11 @@ function renderGmDashboard(container) {
 
     activeChars.forEach(c => {
         charsHtml += `
-            <div style="background:rgba(0,0,0,0.3); padding:1rem; border-radius:8px; border:1px solid var(--glass-border); margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center;">
-                <div>
+            <div style="background:rgba(0,0,0,0.3); padding:1rem; border-radius:8px; border:1px solid var(--glass-border); margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <div style="flex-grow:1; min-width:200px;">
                     <h4 style="color:var(--accent-gold); margin-bottom:0.2rem;">${c.name}</h4>
                     <span style="font-size:0.8rem; color:var(--text-muted);">${c.class} Nv${c.level}</span>
+                    ${c.secret_note ? `<div style="margin-top:0.5rem;"><button class="btn btn-sm" onclick="alert('Segredo de ${c.name}:\\n\\n' + \`${c.secret_note.replace(/`/g, '\\`')}\`)" style="background:transparent; border:1px dashed #9b59b6; color:#9b59b6; font-size:0.75rem; padding:0.2rem 0.5rem;"><i class="fas fa-user-secret"></i> Ver Segredo</button></div>` : ''}
                 </div>
                 <div style="display:flex; gap:1.5rem; text-align:center;">
                     <div><span style="font-size:0.8rem; display:block;">PV</span><b>${c.hp_current}</b></div>

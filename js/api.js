@@ -13,6 +13,7 @@ async function apiCall(endpoint, method = 'GET', data = null) {
     const url = API_BASE + endpoint;
     const options = {
         method,
+        cache: 'no-store',
         headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
@@ -25,13 +26,12 @@ async function apiCall(endpoint, method = 'GET', data = null) {
 
     try {
         const response = await fetch(url, options);
+        const text = await response.text();
         let result;
 
         try {
-            result = await response.json();
+            result = text ? JSON.parse(text) : {};
         } catch (e) {
-            // Handle cases where response isn't JSON
-            const text = await response.text();
             throw new Error(`Invalid JSON response: ${text}`);
         }
 

@@ -43,7 +43,8 @@ let wizardState = {
     weapon: 'Espada Longa',
     armor: 'Nenhuma / Roupas',
     gold: 1,
-    roleplay_answers: ['', '']
+    roleplay_answers: ['', ''],
+    secret_note: ''
 };
 
 async function initPlayerView() {
@@ -168,6 +169,12 @@ function step1HTML() {
                 <div style="font-size:0.85rem; line-height:1.4; flex-grow:1; max-height:130px; overflow-y:auto; padding-right:5px; margin-bottom:1rem;">
                     ${cData.text}
                 </div>
+                <div style="font-size:0.8rem; background: rgba(52,152,219, 0.1); padding: 0.5rem; border-radius: 4px; border-left: 2px solid #3498db; margin-bottom:0.5rem;">
+                    <b style="color:var(--accent-gold); display:block; margin-bottom:0.2rem;">${cData.class_feat_name}:</b> ${cData.class_feat_desc}
+                </div>
+                <div style="font-size:0.8rem; background: rgba(231,140,60, 0.1); padding: 0.5rem; border-radius: 4px; border-left: 2px solid #e78c3c;">
+                    <b style="color:var(--accent-gold); display:block; margin-bottom:0.2rem;">${cData.hope_feat_name} (3 Esperança):</b> ${cData.hope_feat_desc}
+                </div>
             </div>
         `;
     }
@@ -201,11 +208,21 @@ function step2HTML() {
 
     let subHtml = `<div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">`;
     const subclassesObj = DH_CLASSES_DATA[wizardState.class].subclasses;
-    for(const [sName, sText] of Object.entries(subclassesObj)) {
+    for(const [sName, sData] of Object.entries(subclassesObj)) {
         subHtml += `
-            <div class="glass-panel wiz-sub-card ${wizardState.subclass === sName ? 'selected' : ''}" data-val="${sName}" style="padding:1.5rem; cursor:pointer; border:1px solid ${wizardState.subclass === sName ? 'var(--accent-gold)' : 'var(--glass-border)'}; text-align:center;">
-                <div style="font-family:'Crimson Text', serif; font-size:1.3rem; color:var(--accent-gold); margin-bottom:0.5rem;">${sName}</div>
-                <div style="font-size:0.9rem; line-height:1.4;">${sText}</div>
+            <div class="glass-panel wiz-sub-card ${wizardState.subclass === sName ? 'selected' : ''}" data-val="${sName}" style="padding:1.5rem; cursor:pointer; border:1px solid ${wizardState.subclass === sName ? 'var(--accent-gold)' : 'var(--glass-border)'}; text-align:left; display:flex; flex-direction:column;">
+                <div style="font-family:'Crimson Text', serif; font-size:1.3rem; color:var(--accent-gold); margin-bottom:0.5rem; text-align:center; font-weight:bold;">${sName}</div>
+                <div style="font-size:0.85rem; line-height:1.4; margin-bottom:1rem; color:var(--text-muted); text-align:center;">${sData.text}</div>
+                
+                <div style="font-size:0.8rem; background: rgba(46,204,113, 0.1); padding: 0.5rem; border-radius: 4px; border-left: 2px solid #2ecc71; margin-bottom:0.5rem;">
+                    <b style="color:#2ecc71; display:block; margin-bottom:0.1rem;">Nível 1 (Fundamental):</b> ${sData.fundamental}
+                </div>
+                <div style="font-size:0.8rem; background: rgba(52,152,219, 0.1); padding: 0.5rem; border-radius: 4px; border-left: 2px solid #3498db; margin-bottom:0.5rem;">
+                    <b style="color:#3498db; display:block; margin-bottom:0.1rem;">Nível 5 (Especialização):</b> ${sData.especializacao}
+                </div>
+                <div style="font-size:0.8rem; background: rgba(155,89,182, 0.1); padding: 0.5rem; border-radius: 4px; border-left: 2px solid #9b59b6;">
+                    <b style="color:#9b59b6; display:block; margin-bottom:0.1rem;">Nível 8 (Maestria):</b> ${sData.maestria}
+                </div>
             </div>
         `;
     }
@@ -371,9 +388,15 @@ function step7HTML_Roleplay() {
             <label style="color:#e78c3c;">Pergunta 1: ${rpObj[0]}</label>
             <textarea id="wiz-rp1" style="width:100%; height:80px; background:rgba(255,255,255,0.05); color:white; border:1px solid var(--glass-border); padding:0.5rem; resize:none;">${wizardState.roleplay_answers[0]}</textarea>
         </div>
-        <div class="input-group">
+        <div class="input-group" style="margin-bottom:2rem;">
             <label style="color:#3498db;">Pergunta 2: ${rpObj[1]}</label>
             <textarea id="wiz-rp2" style="width:100%; height:80px; background:rgba(255,255,255,0.05); color:white; border:1px solid var(--glass-border); padding:0.5rem; resize:none;">${wizardState.roleplay_answers[1]}</textarea>
+        </div>
+        <hr style="border-color:rgba(255,255,255,0.1); margin-bottom: 2rem;">
+        <h4 style="color:#9b59b6; margin-bottom:0.5rem;">Segredos Obscuros</h4>
+        <div class="input-group">
+            <label style="color:var(--text-muted);">Informação do jogador para o mestre (Opcional). Escreva aqui motivações secretas, traumas, roubos ou intenções que os outros jogadores na mesa não devem saber ainda.</label>
+            <textarea id="wiz-secret" style="width:100%; height:120px; background:rgba(155, 89, 182, 0.05); color:white; border:1px solid var(--glass-border); padding:0.5rem; resize:none;">${wizardState.secret_note}</textarea>
         </div>
     `;
 }
@@ -505,6 +528,7 @@ function saveStepData(step) {
     } else if (step === 7) {
         wizardState.roleplay_answers[0] = document.getElementById('wiz-rp1').value;
         wizardState.roleplay_answers[1] = document.getElementById('wiz-rp2').value;
+        wizardState.secret_note = document.getElementById('wiz-secret').value;
     }
 }
 
@@ -520,6 +544,7 @@ async function submitCharacter() {
             { name: wizardState.armor, details: INVENTORY_ITEMS.armors[wizardState.armor] }
         ],
         bag: [
+            ...DH_CLASSES_DATA[wizardState.class].items,
             'Tocha', '15m de Corda', 'Suprimentos Básicos', `Poção Menor de ${wizardState.potion}`
         ]
     };
@@ -537,11 +562,12 @@ async function submitCharacter() {
         attributes: wizardState.attributes,
         experiences: wizardState.experiences,
         evasion_base: finalEvasion,
-        hp_base: 6, // We'll just assign 6 safely initially to prototype if missing
+        hp_base: (DH_CLASSES_DATA[wizardState.class]?.hp || 6) + (wizardState.ancestry === 'Gigante' ? 1 : 0),
         armor_base: INVENTORY_ITEMS.armors[wizardState.armor].armor_base,
         inventory: inv,
         cards: activeDomainCards,
-        roleplay: wizardState.roleplay_answers // <--- Passed to backend!
+        roleplay: wizardState.roleplay_answers, // <--- Passed to backend!
+        secret_note: wizardState.secret_note
     };
 
     try {
@@ -644,6 +670,46 @@ function renderCharacterSheet(char, container) {
                     </div>
                 </div>
                 
+                <div class="glass-panel sheet-section" style="margin-top:2rem;">
+                    <h3 style="color:var(--accent-gold);">Habilidades e Sangue</h3>
+                    <div style="background:rgba(231,140,60,0.1); padding:0.8rem; border-left:3px solid #e78c3c; margin-bottom:1rem; border-radius:4px;">
+                        <div style="font-weight:bold; font-size:1rem; color:#e78c3c; margin-bottom:0.2rem;">Ato de Esperança: ${DH_CLASSES_DATA[char.class]?.hope_feat_name || 'Desconhecido'}</div>
+                        <div style="font-size:0.85rem; color:var(--text-muted);">${DH_CLASSES_DATA[char.class]?.hope_feat_desc || ''}</div>
+                    </div>
+                    <div style="background:rgba(52,152,219,0.1); padding:0.8rem; border-left:3px solid #3498db; margin-bottom:1rem; border-radius:4px;">
+                        <div style="font-weight:bold; font-size:1rem; color:#3498db; margin-bottom:0.2rem;">Habilidade da Classe: ${DH_CLASSES_DATA[char.class]?.class_feat_name || 'Desconhecido'}</div>
+                        <div style="font-size:0.85rem; color:var(--text-muted);">${DH_CLASSES_DATA[char.class]?.class_feat_desc || ''}</div>
+                    </div>
+                    <h4 style="color:#2ecc71; margin-bottom:0.5rem; border-bottom:1px solid rgba(46,204,113,0.3); padding-bottom:5px;">Caminho de ${char.subclass}</h4>
+                    <div style="font-size:0.85rem; background:rgba(46,204,113,0.05); padding:0.8rem; border-radius:4px; margin-bottom:0.5rem;">
+                        <b style="color:#2ecc71;">Nível 1 (Fundamental):</b> ${DH_CLASSES_DATA[char.class]?.subclasses[char.subclass]?.fundamental || ''}
+                    </div>
+                    <div style="font-size:0.85rem; background:rgba(46,204,113,0.05); padding:0.8rem; border-radius:4px; margin-bottom:0.5rem;">
+                        <b style="color:#2ecc71;">Nível 5 (Especialização):</b> <span style="color:var(--text-muted);">(${char.level >= 5 ? 'Desbloqueado' : 'Bloqueado'})</span> ${DH_CLASSES_DATA[char.class]?.subclasses[char.subclass]?.especializacao || ''}
+                    </div>
+                    <div style="font-size:0.85rem; background:rgba(46,204,113,0.05); padding:0.8rem; border-radius:4px; margin-bottom:1rem;">
+                        <b style="color:#2ecc71;">Nível 8 (Maestria):</b> <span style="color:var(--text-muted);">(${char.level >= 8 ? 'Desbloqueado' : 'Bloqueado'})</span> ${DH_CLASSES_DATA[char.class]?.subclasses[char.subclass]?.maestria || ''}
+                    </div>
+                </div>
+
+                <div class="glass-panel sheet-section" style="margin-top:2rem;">
+                    <h3 style="color:#9b59b6;">Passado, Ligações e Segredos</h3>
+                    <div style="background:rgba(255,255,255,0.05); padding:1rem; border-left:4px solid #e78c3c; margin-bottom:1rem;">
+                        <div style="font-weight:bold; font-size:0.95rem; color:#e78c3c; margin-bottom:0.3rem;">Pergunta 1</div>
+                        <div style="font-size:0.9rem; color:var(--text-muted); font-style:italic;">${char.roleplay_answers[0] || 'Sem dados'}</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.05); padding:1rem; border-left:4px solid #3498db; margin-bottom:1rem;">
+                        <div style="font-weight:bold; font-size:0.95rem; color:#3498db; margin-bottom:0.3rem;">Pergunta 2</div>
+                        <div style="font-size:0.9rem; color:var(--text-muted); font-style:italic;">${char.roleplay_answers[1] || 'Sem dados'}</div>
+                    </div>
+                    ${char.secret_note ? `
+                    <div style="background:rgba(0,0,0,0.4); padding:1rem; border:1px dashed #9b59b6; margin-bottom:1rem; border-radius:4px;">
+                        <div style="font-weight:bold; font-size:1rem; color:#9b59b6; margin-bottom:0.5rem;"><i class="fas fa-user-secret"></i> Apenas o Mestre Sabe...</div>
+                        <div style="font-size:0.9rem; color:#dcdcdc;">${char.secret_note}</div>
+                    </div>
+                    ` : ''}
+                </div>
+
                 <div class="glass-panel sheet-section" style="margin-top:2rem;">
                     <h3 style="color:#3498db;">Deck de Domínio Ativo</h3>
                     ${char.cards.length ? cardsHtml : '<p style="color:var(--text-muted);">Nenhuma carta ativa.</p>'}

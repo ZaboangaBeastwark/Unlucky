@@ -14,8 +14,8 @@ $action = $_GET['action'] ?? '';
 
 if ($method === 'GET') {
     if ($action === 'mine') {
-        // Fetch all current user's characters
-        $stmt = $pdo->prepare('SELECT * FROM characters WHERE user_id = ?');
+        // Fetch all current user's characters with session name
+        $stmt = $pdo->prepare('SELECT c.*, s.name as session_name FROM characters c LEFT JOIN sessions s ON c.session_id = s.id WHERE c.user_id = ?');
         $stmt->execute([$_SESSION['user_id']]);
         $chars = $stmt->fetchAll();
 
@@ -25,6 +25,7 @@ if ($method === 'GET') {
             $char['inventory'] = json_decode($char['inventory'], true);
             $char['experiences'] = json_decode($char['experiences'], true);
             $char['cards'] = json_decode($char['cards'], true);
+            $char['roleplay_answers'] = json_decode($char['roleplay_answers'], true);
         }
 
         jsonResponse(['characters' => $chars]);
@@ -33,6 +34,23 @@ if ($method === 'GET') {
         $stmt = $pdo->query('SELECT id, name FROM sessions ORDER BY created_at DESC');
         $sessions = $stmt->fetchAll();
         jsonResponse(['campaigns' => $sessions]);
+    } elseif ($action === 'get_player_character') {
+        $charId = $_GET['id'] ?? null;
+        $stmt = $pdo->prepare('SELECT c.*, s.name as session_name FROM characters c LEFT JOIN sessions s ON c.session_id = s.id WHERE c.id = ? AND c.user_id = ?');
+        $stmt->execute([$charId, $_SESSION['user_id']]);
+        $char = $stmt->fetch();
+        if ($char) {
+            $char['attributes'] = json_decode($char['attributes'], true);
+            $char['inventory'] = json_decode($char['inventory'], true);
+            $char['experiences'] = json_decode($char['experiences'], true);
+            $char['cards'] = json_decode($char['cards'], true);
+            $char['roleplay_answers'] = json_decode($char['roleplay_answers'], true);
+            jsonResponse($char);
+        } else {
+            jsonResponse(['error' => 'Not found'], 404);
+        }
+    } else {
+        jsonResponse(['error' => 'Action GET not found'], 404);
     }
 } else if ($method === 'POST') {
     $input = json_decode(file_get_contents('php://input'), true);
@@ -51,11 +69,13 @@ if ($method === 'GET') {
         $stressBase = 6;
         $armorSlots = (int) ($input['armor_slots'] ?? 0);
 
+        $secretNote = $input['secret_note'] ?? '';
+
         try {
             $stmt = $pdo->prepare('
                 INSERT INTO characters 
-                (user_id, name, class, subclass, heritage, hp_base, hp_current, stress_base, stress_current, evasion_base, hope_current, armor_base, armor_slots, attributes, inventory, experiences, cards, roleplay_answers) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (user_id, name, class, subclass, heritage, hp_base, hp_current, stress_base, stress_current, evasion_base, hope_current, armor_base, armor_slots, attributes, inventory, experiences, cards, roleplay_answers, secret_note) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ');
             $stmt->execute([
                 $_SESSION['user_id'],
@@ -75,7 +95,8 @@ if ($method === 'GET') {
                 $invJson,
                 $expJson,
                 $cardsJson,
-                $roleplayJson
+                $roleplayJson,
+                $secretNote
             ]);
             jsonResponse(['message' => 'Character created successfully', 'id' => $pdo->lastInsertId()]);
         } catch (Exception $e) {
@@ -93,17 +114,39 @@ if ($method === 'GET') {
         if (!$stmt->fetch())
             jsonResponse(['error' => 'Unauthorized'], 403);
 
-        $allowedFields = ['hp_current', 'stress_current', 'hope_current', 'evasion_current_override', 'armor_slots'];
+        $allowedFields = ['hp_current', 'stress_current', 'hope_current', 'evasion_current_override', 'armor_slots', 'armor_base_override'];
         if (in_array($field, $allowedFields)) {
-            // Fetch current to increment/decrement safely
-            $stmt = $pdo->prepare("SELECT {$field} FROM characters WHERE id = ?");
+            // Fetch current to increment/decrement safely, alongside base stats to calculate overrides from the correct baseline
+            $stmt = $pdo->prepare("SELECT {$field}, evasion_base, armor_base FROM characters WHERE id = ?");
             $stmt->execute([$charId]);
-            $currentVal = (int) $stmt->fetchColumn();
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            $currentVal = $row[$field];
+
+            // If the field is an override and it's null, we MUST start the calculation from its base value!
+            if ($currentVal === null) {
+                if ($field === 'evasion_current_override') {
+                    $currentVal = $row['evasion_base'];
+                } else if ($field === 'armor_base_override') {
+                    $currentVal = $row['armor_base'];
+                } else {
+                    $currentVal = 0;
+                }
+            } else {
+                $currentVal = (int) $currentVal;
+            }
 
             $newVal = $currentVal + (int) $value;
             // Prevent going below 0 for standard resources
-            if ($newVal < 0 && $field !== 'evasion_current_override')
+            if ($newVal < 0 && $field !== 'evasion_current_override' && $field !== 'armor_base_override') {
                 $newVal = 0;
+            }
+
+            // Apply Upper Bounds if specified by frontend
+            $maxLimit = $input['max_limit'] ?? null;
+            if ($maxLimit !== null && $newVal > (int) $maxLimit) {
+                $newVal = (int) $maxLimit;
+            }
 
             $updateStmt = $pdo->prepare("UPDATE characters SET {$field} = ? WHERE id = ?");
             $updateStmt->execute([$newVal, $charId]);
@@ -126,6 +169,29 @@ if ($method === 'GET') {
             $uStmt = $pdo->prepare("UPDATE characters SET inventory = ? WHERE id = ?");
             $uStmt->execute([json_encode($inv), $charId]);
             jsonResponse(['message' => 'Gold updated successfully', 'new_value' => $inv['gold']]);
+        }
+
+        // Special handle for JSON Bag addition/removal
+        if ($field === 'add_bag' || $field === 'remove_bag') {
+            $stmt = $pdo->prepare("SELECT inventory FROM characters WHERE id = ?");
+            $stmt->execute([$charId]);
+            $inv = json_decode($stmt->fetchColumn(), true);
+            if (!isset($inv['bag'])) {
+                $inv['bag'] = [];
+            }
+
+            if ($field === 'add_bag') {
+                $inv['bag'][] = (string) $value;
+            } else if ($field === 'remove_bag') {
+                $idx = (int) $value;
+                if (isset($inv['bag'][$idx])) {
+                    array_splice($inv['bag'], $idx, 1);
+                }
+            }
+
+            $uStmt = $pdo->prepare("UPDATE characters SET inventory = ? WHERE id = ?");
+            $uStmt->execute([json_encode($inv), $charId]);
+            jsonResponse(['message' => 'Inventory Bag updated successfully']);
         }
 
         jsonResponse(['error' => 'Invalid field'], 400);
