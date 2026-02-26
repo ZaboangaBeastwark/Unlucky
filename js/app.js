@@ -61,12 +61,21 @@ function startLogPolling(sessionId) {
                     lastLogId = Math.max(lastLogId, log.id);
                     const div = document.createElement('div');
                     div.className = 'log-entry';
+                    div.id = `log-entry-${log.id}`;
+                    div.style.position = 'relative';
                     if (log.critical == 1) div.classList.add('critical');
                     else if (log.hope_die < log.fear_die) div.classList.add('fear');
                     if (log.action_type === 'status_change') div.classList.add('alert');
 
-                    div.innerHTML = `<div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:0.2rem;">${new Date(log.created_at).toLocaleTimeString().slice(0, 5)}</div>
-                                     ${log.message}`;
+                    let deleteBtn = '';
+                    if (window.appState && window.appState.user && window.appState.user.role === 'gm') {
+                        deleteBtn = `<button onclick="deleteActionLog(${log.id})" style="position:absolute; top:0.2rem; right:0.2rem; background:none; border:none; color:#e74c3c; cursor:pointer;" title="Excluir Registro"><i class="fas fa-trash"></i></button>`;
+                    }
+
+                    div.innerHTML = `
+                        ${deleteBtn}
+                        <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:0.2rem;">${new Date(log.created_at).toLocaleTimeString().slice(0, 5)}</div>
+                        ${log.message}`;
                     container.appendChild(div);
                 });
                 container.scrollTop = container.scrollHeight;
@@ -81,4 +90,15 @@ function startLogPolling(sessionId) {
 function stopLogPolling() {
     if (logInterval) clearInterval(logInterval);
     document.getElementById('action-log-panel').style.display = 'none';
+}
+
+async function deleteActionLog(logId) {
+    if (!confirm('Deseja realmente excluir este registro do chat?')) return;
+    try {
+        await apiCall('logs.php', 'POST', { action: 'delete', id: logId });
+        const el = document.getElementById(`log-entry-${logId}`);
+        if (el) el.remove();
+    } catch (e) {
+        alert('Erro ao excluir log: ' + e.message);
+    }
 }

@@ -14,8 +14,8 @@ $action = $_GET['action'] ?? '';
 
 if ($method === 'GET') {
     if ($action === 'mine') {
-        // Fetch all current user's characters with session name
-        $stmt = $pdo->prepare('SELECT c.*, s.name as session_name FROM characters c LEFT JOIN sessions s ON c.session_id = s.id WHERE c.user_id = ?');
+        // Fetch all current user's characters with session name and shop_open status
+        $stmt = $pdo->prepare('SELECT c.*, s.name as session_name, s.shop_open FROM characters c LEFT JOIN sessions s ON c.session_id = s.id WHERE c.user_id = ?');
         $stmt->execute([$_SESSION['user_id']]);
         $chars = $stmt->fetchAll();
 
@@ -36,7 +36,7 @@ if ($method === 'GET') {
         jsonResponse(['campaigns' => $sessions]);
     } elseif ($action === 'get_player_character') {
         $charId = $_GET['id'] ?? null;
-        $stmt = $pdo->prepare('SELECT c.*, s.name as session_name FROM characters c LEFT JOIN sessions s ON c.session_id = s.id WHERE c.id = ? AND c.user_id = ?');
+        $stmt = $pdo->prepare('SELECT c.*, s.name as session_name, s.shop_open FROM characters c LEFT JOIN sessions s ON c.session_id = s.id WHERE c.id = ? AND c.user_id = ?');
         $stmt->execute([$charId, $_SESSION['user_id']]);
         $char = $stmt->fetch();
         if ($char) {
@@ -195,6 +195,42 @@ if ($method === 'GET') {
         }
 
         jsonResponse(['error' => 'Invalid field'], 400);
+
+    } elseif ($action === 'update_inventory') {
+        $charId = $input['id'] ?? null;
+        $inventory = $input['inventory'] ?? null;
+
+        if (!$charId || !$inventory) {
+            jsonResponse(['error' => 'ID do personagem ou inventário ausente.'], 400);
+        }
+
+        // Security check
+        $stmt = $pdo->prepare('SELECT id FROM characters WHERE id = ? AND user_id = ?');
+        $stmt->execute([$charId, $_SESSION['user_id']]);
+        if (!$stmt->fetch()) {
+            jsonResponse(['error' => 'Unauthorized'], 403);
+        }
+
+        // Ensure bag and equipped are strict indexed arrays
+        if (isset($inventory['bag']) && is_array($inventory['bag'])) {
+            $inventory['bag'] = array_values($inventory['bag']);
+        } else {
+            $inventory['bag'] = [];
+        }
+
+        if (isset($inventory['equipped']) && is_array($inventory['equipped'])) {
+            $inventory['equipped'] = array_values($inventory['equipped']);
+        } else {
+            $inventory['equipped'] = [];
+        }
+
+        // Save JSON string back to DB
+        $invJson = json_encode($inventory);
+        $updateStmt = $pdo->prepare('UPDATE characters SET inventory = ? WHERE id = ?');
+        $updateStmt->execute([$invJson, $charId]);
+
+        jsonResponse(['message' => 'Inventário atualizado com sucesso.']);
+
     } elseif ($action === 'join_session') {
         $charId = $input['character_id'] ?? null;
         $sessionId = $input['session_id'] ?? null;

@@ -470,3 +470,9 @@ h6,
     border-color: var(--accent-red);
     box-shadow: 0 0 5px rgba(231, 76, 60, 0.5);
 }
+
+/* Fix dropdown options visibility */
+option {
+    background-color: var(--bg-darker);
+    color: var(--text-light);
+}

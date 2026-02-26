@@ -3,23 +3,7 @@
 // DH_CLASSES, DH_ANCESTRIES_DATA, DH_COMMUNITIES_DATA, DH_DOMAIN_CARDS_LVL1, etc.
 // are now assumed to be loaded via <script src="js/dh_data.js"></script> before player.js
 
-const INVENTORY_ITEMS = {
-    weapons: {
-        'Espada Longa': { type: 'Primária', slots: 1, damage: 'd8', attr: 'Força', traits: 'Confiável' },
-        'Arco Curto': { type: 'Primária', slots: 1, damage: 'd6', attr: 'Agilidade', traits: 'Longo Alcance, Recarga' },
-        'Adaga': { type: 'Secundária', slots: 1, damage: 'd4', attr: 'Agilidade', traits: 'Ágil, Arremesso, Ocultável' },
-        'Cajado': { type: 'Duas Mãos', slots: 2, damage: 'd8', attr: 'Conhecimento', traits: 'Mágico' },
-        'Machado de Batalha': { type: 'Duas Mãos', slots: 2, damage: 'd10', attr: 'Força', traits: 'Pesado, Devastador' },
-        'Sabre': { type: 'Primária', slots: 1, damage: 'd8', attr: 'Destreza', traits: 'Aparar' },
-        'Varinha': { type: 'Secundária', slots: 1, damage: 'd4', attr: 'Presença', traits: 'Mágico, Ocultável' }
-    },
-    armors: {
-        'Nenhuma / Roupas': { armor_base: 0, evasion_mod: 0, traits: 'Livre' },
-        'Couro Leve': { armor_base: 3, evasion_mod: 0, traits: 'Nenhum' },
-        'Cota de Malha': { armor_base: 4, evasion_mod: -1, traits: 'Metal, Pesada' },
-        'Armadura de Placas': { armor_base: 5, evasion_mod: -2, traits: 'Metal, Muito Pesada, Barulhenta' }
-    }
-};
+window.DH_EQUIPMENT = [];
 
 const STAT_BLOCK = [2, 1, 1, 0, 0, -1];
 
@@ -44,10 +28,15 @@ async function initPlayerView() {
     const container = document.getElementById('player-dynamic-area');
     container.innerHTML = `<div class="glass-panel" style="padding: 2rem; text-align: center;">Carregando seus heróis...</div>`;
     try {
+        const eqRes = await apiCall('equipment.php?action=list');
+        window.DH_EQUIPMENT = eqRes.equipment || [];
+
         const res = await apiCall('character.php?action=mine');
         if (res.characters) {
+            window.chars = res.characters;
             renderCharacterSelection(res.characters, container);
         } else {
+            window.chars = [];
             renderCharacterSelection([], container);
         }
     } catch (e) {
@@ -140,6 +129,7 @@ window.renderCharacterSelection = function (chars, container) {
 };
 
 window.openCharacterSheet = function (char) {
+    window.currentPlayingCharacter = char;
     const container = document.getElementById('player-dynamic-area');
     renderCharacterSheet(char, container);
 };
@@ -212,6 +202,13 @@ function renderCharacterWizard(container) {
         else if (currentStep === 8) content.innerHTML = step8HTML_Review();
 
         attachStepListeners(currentStep);
+
+        // Ensure we scroll to the top of the page when entering a new step
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        // Also reset the inner scrollable container
+        if (content) {
+            content.scrollTop = 0;
+        }
     };
 
     document.getElementById('wiz-next').addEventListener('click', async () => {
@@ -349,17 +346,17 @@ function step2HTML() {
     subHtml += `</div>`;
 
     return `
-        <h3>Passo 2: Herança e Subclasse</h3>
-        <p style="margin-bottom:1rem;">Sua herança cultural dita como o mundo te enxerga inicialmente.</p>
+        <h3>Passo 2: Fundação, Herança e Comunidade</h3>
+        <p style="margin-bottom:1rem;">A base final da sua classe e como o mundo te enxerga inicialmente.</p>
+        
+        <h4 style="color:var(--accent-gold); margin-bottom:0.5rem;">Fundação da Classe (Subclasse de ${wizardState.class})</h4>
+        ${subHtml}
         
         <h4 style="color:#e78c3c; margin-bottom:0.5rem;">Ancestralidade (Biologia)</h4>
         ${ancHtml}
         
         <h4 style="color:#3498db; margin-bottom:0.5rem;">Comunidade (Criação)</h4>
         ${comHtml}
-        
-        <h4 style="color:var(--accent-gold); margin-bottom:0.5rem;">Fundação da Classe (Subclasse de ${wizardState.class})</h4>
-        ${subHtml}
     `;
 }
 
@@ -447,32 +444,41 @@ function step5HTML_Domains() {
 // STEP 6: EQUIPMENT (Visual Cards)
 function step6HTML_Equipment() {
     let wHtml = `<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:1rem; margin-bottom:1.5rem;">`;
-    for (let w in INVENTORY_ITEMS.weapons) {
-        let i = INVENTORY_ITEMS.weapons[w];
+
+    const weaponsTier1 = window.DH_EQUIPMENT.filter(e => (e.category === 'primary_weapon' || e.category === 'secondary_weapon') && e.tier === 1);
+
+    weaponsTier1.forEach(eq => {
+        let w = eq.name;
+        let i = eq.data || {};
+        const typeStr = eq.category === 'primary_weapon' ? 'Primária' : 'Secundária';
         wHtml += `
             <div class="glass-panel wiz-weapon-card ${wizardState.weapon === w ? 'selected' : ''}" data-val="${w}" style="padding:1rem; cursor:pointer; border:1px solid ${wizardState.weapon === w ? 'var(--accent-gold)' : 'var(--glass-border)'}; text-align:left;">
                 <div style="font-weight:bold; color:var(--accent-gold);">${w}</div>
-                <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.5rem;">${i.type} (${i.slots} slot${i.slots > 1 ? 's' : ''})</div>
-                <div style="font-size:0.85rem;">Ataca usando magia de <b>${i.attr}</b></div>
-                <div style="font-size:0.85rem;">Dano ao Acertar: <b>${i.damage}</b></div>
-                <div style="font-size:0.75rem; margin-top:0.4rem; color:var(--text-muted);"><i>${i.traits}</i></div>
+                <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.5rem;">${typeStr} (${i.slots || 1} slot${i.slots > 1 ? 's' : ''})</div>
+                <div style="font-size:0.85rem;">Ataca com <b>${i.attr || 'N/A'}</b></div>
+                <div style="font-size:0.85rem;">Dano ao Acertar: <b>${i.damage || i.armor_bonus || 'N/A'}</b></div>
+                <div style="font-size:0.75rem; margin-top:0.4rem; color:var(--text-muted);"><i>${i.traits || eq.description}</i></div>
             </div>
         `;
-    }
+    });
     wHtml += `</div>`;
 
     let aHtml = `<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:1rem; margin-bottom:1.5rem;">`;
-    for (let a in INVENTORY_ITEMS.armors) {
-        let i = INVENTORY_ITEMS.armors[a];
+
+    const armorsTier1 = window.DH_EQUIPMENT.filter(e => e.category === 'armor' && e.tier === 1);
+
+    armorsTier1.forEach(eq => {
+        let a = eq.name;
+        let i = eq.data || {};
         aHtml += `
             <div class="glass-panel wiz-armor-card ${wizardState.armor === a ? 'selected' : ''}" data-val="${a}" style="padding:1rem; cursor:pointer; border:1px solid ${wizardState.armor === a ? 'var(--accent-gold)' : 'var(--glass-border)'}; text-align:left;">
                 <div style="font-weight:bold; color:#e78c3c;">${a}</div>
-                <div style="font-size:0.85rem; margin-top:0.5rem;">Pontos de Armadura: <b>${i.armor_base}</b></div>
-                <div style="font-size:0.85rem; color:${i.evasion_mod < 0 ? '#e74c3c' : 'var(--text-muted)'}">Penalidade de Peso (Evasão): <b>${i.evasion_mod}</b></div>
-                <div style="font-size:0.75rem; margin-top:0.4rem; color:var(--text-muted);"><i>${i.traits}</i></div>
+                <div style="font-size:0.85rem; margin-top:0.5rem;">Pontos de Armadura: <b>${i.armor_base || 0}</b></div>
+                <div style="font-size:0.85rem; color:${(i.evasion_mod || 0) < 0 ? '#e74c3c' : 'var(--text-muted)'}">Punição de Evasão: <b>${i.evasion_mod || 0}</b></div>
+                <div style="font-size:0.75rem; margin-top:0.4rem; color:var(--text-muted);"><i>${i.traits || eq.description}</i></div>
             </div>
         `;
-    }
+    });
     aHtml += `</div>`;
 
     return `
@@ -665,18 +671,29 @@ function saveStepData(step) {
 
 // ================= SUBMISSION ================= //
 async function submitCharacter() {
+    const selWeapon = window.DH_EQUIPMENT.find(e => e.name === wizardState.weapon);
+    const selArmor = window.DH_EQUIPMENT.find(e => e.name === wizardState.armor);
+    const weaponData = selWeapon ? selWeapon.data : {};
+    const armorData = selArmor ? selArmor.data : { armor_base: 0, evasion_mod: 0 };
+
     // Basic evasão is 10 + Agility + Armor Mod in DH. Let's use 10 as base. 
-    const finalEvasion = 10 + (wizardState.attributes['Agility'] || 0) + (INVENTORY_ITEMS.armors[wizardState.armor].evasion_mod || 0);
+    const finalEvasion = 10 + (wizardState.attributes['Agility'] || 0) + (armorData.evasion_mod || 0);
 
     const inv = {
         gold: 1,
         equipped: [
-            { name: wizardState.weapon, details: INVENTORY_ITEMS.weapons[wizardState.weapon] },
-            { name: wizardState.armor, details: INVENTORY_ITEMS.armors[wizardState.armor] }
+            window.DH_EQUIPMENT.find(e => e.name === wizardState.weapon) || { name: wizardState.weapon, data: weaponData },
+            window.DH_EQUIPMENT.find(e => e.name === wizardState.armor) || { name: wizardState.armor, data: armorData }
         ],
         bag: [
-            ...DH_CLASSES_DATA[wizardState.class].items,
-            'Tocha', '15m de Corda', 'Suprimentos Básicos', `Poção Menor de ${wizardState.potion}`
+            ...DH_CLASSES_DATA[wizardState.class].items.map(itemName => {
+                const found = window.DH_EQUIPMENT.find(e => e.name === itemName);
+                return found ? found : itemName;
+            }),
+            window.DH_EQUIPMENT.find(e => e.name === 'Tocha') || 'Tocha',
+            '15m de Corda',
+            window.DH_EQUIPMENT.find(e => e.name === 'Suprimentos Básicos') || 'Suprimentos Básicos',
+            window.DH_EQUIPMENT.find(e => e.name === `Poção de Cura Menor`) || `Poção Menor de ${wizardState.potion}`
         ]
     };
 
@@ -694,7 +711,7 @@ async function submitCharacter() {
         experiences: wizardState.experiences,
         evasion_base: finalEvasion,
         hp_base: (DH_CLASSES_DATA[wizardState.class]?.hp || 6) + (wizardState.ancestry === 'Gigante' ? 1 : 0),
-        armor_base: INVENTORY_ITEMS.armors[wizardState.armor].armor_base,
+        armor_base: armorData.armor_base || 0,
         inventory: inv,
         cards: activeDomainCards,
         roleplay: wizardState.roleplay_answers, // <--- Passed to backend!
@@ -732,6 +749,30 @@ function renderCharacterSheet(char, container) {
         if (bags > 0) p.push(`${bags} Saco${bags > 1 ? 's' : ''}`);
         if (handfuls > 0) p.push(`${handfuls} Punhado${handfuls > 1 ? 's' : ''}`);
         return p.join(' e ') + ` <span style="font-size:0.75rem; color:var(--text-muted);">(${amount})</span>`;
+    };
+
+    window.formatPlayerEquipmentData = (data, category) => {
+        if (!data) return '';
+        let badges = [];
+        const badgeStyle = 'padding:0.2rem 0.5rem; border-radius:4px; font-size:0.7rem; font-weight:bold; white-space:nowrap; display:inline-block;';
+
+        if (data.damage) badges.push(`<span style="${badgeStyle} background:rgba(231,76,60,0.2); color:#e74c3c; border:1px solid #e74c3c;">Dano: ${data.damage}</span>`);
+        if (data.attr) badges.push(`<span style="${badgeStyle} background:rgba(52,152,219,0.2); color:#3498db; border:1px solid #3498db;">Atrib: ${data.attr}</span>`);
+        if (data.armor_base) badges.push(`<span style="${badgeStyle} background:rgba(46,204,113,0.2); color:#2ecc71; border:1px solid #2ecc71;">Defesa: ${data.armor_base}</span>`);
+        if (data.armor_slots) badges.push(`<span style="${badgeStyle} background:rgba(241,196,15,0.2); color:#f1c40f; border:1px solid #f1c40f;">Resist: ${data.armor_slots}</span>`);
+        if (data.evasion_mod && data.evasion_mod !== 0) badges.push(`<span style="${badgeStyle} background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.3);">Esquiva: ${data.evasion_mod > 0 ? '+' : ''}${data.evasion_mod}</span>`);
+        if (data.traits) badges.push(`<span style="${badgeStyle} background:rgba(142,68,173,0.2); color:#9b59b6; border:1px solid #9b59b6;">${data.traits}</span>`);
+
+        return badges.join(' ');
+    };
+
+    window.parseGoldCost = (costStr) => {
+        if (!costStr) return 0;
+        const s = costStr.toLowerCase();
+        const num = parseInt(s) || 0;
+        if (s.includes('baú')) return num * 100;
+        if (s.includes('bolsa') || s.includes('saco')) return num * 10;
+        return num; // Default case is punhados (handfuls)
     };
 
     // Attribute Tooltips (Page 19 Daggerheart Rules)
@@ -814,7 +855,7 @@ function renderCharacterSheet(char, container) {
         `;
     });
 
-    // Basic Inventory
+    // Enhanced Inventory Display
     let invHtml = `<div style="margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center; background:rgba(241,196,15,0.1); padding:0.8rem; border-left:3px solid #f1c40f; border-radius:4px;">
         <span style="font-weight:bold;">Ouro Carregado:</span>
         <span style="display:flex; align-items:center; gap:0.5rem;">
@@ -823,31 +864,70 @@ function renderCharacterSheet(char, container) {
             <button class="btn btn-sm" onclick="updateResource(${char.id}, 'gold', 1)" style="padding:0.2rem 0.5rem;">+</button>
         </span>
     </div>
-    <p style="color:var(--accent-gold); font-weight:bold; margin-bottom:0.5rem;">Carga Equipada:</p>
-    <div style="display:flex; gap:0.5rem; margin-bottom:1.5rem; flex-wrap:wrap;">`;
+    
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:0.8rem;">
+        <h4 style="color:var(--accent-gold); margin:0;">Carga Equipada</h4>
+        <button class="btn ${char.shop_open ? 'btn-primary' : 'btn-outline'}" onclick="openPlayerShop()" style="padding:0.4rem 0.8rem; font-size:0.85rem; ${char.shop_open ? '' : 'color:var(--text-muted); opacity:0.7;'}">
+            <i class="fas fa-shopping-cart" style="margin-right:5px;"></i> ${char.shop_open ? 'Abrir Mercado' : 'Mercado Fechado'}
+        </button>
+    </div>
+    
+    <div style="display:flex; flex-direction:column; gap:0.8rem; margin-bottom:1.5rem;">`;
 
     if (char.inventory.equipped.length) {
-        char.inventory.equipped.forEach(i => {
-            const detailsStr = encodeURIComponent(JSON.stringify(i));
-            invHtml += `<button class="btn btn-primary" onclick="showItemDetails('${detailsStr}')" style="padding:0.5rem 1rem; font-size:0.85rem;"><i class="fas fa-hand-holding-medical" style="margin-right:5px;"></i> ${i.name}</button>`;
+        char.inventory.equipped.forEach((item, idx) => {
+            // Resolver item: tenta por ID, senao por nome (para itens iniciais/legado)
+            let fullItem = window.DH_EQUIPMENT.find(e => e.id === item.id) ||
+                window.DH_EQUIPMENT.find(e => e.name === (item.name || item)) ||
+                item;
+
+            // Suporta .data (mercado) ou .details/proprio item (legado wizard)
+            const itemData = fullItem.data || fullItem.details || (typeof fullItem === 'object' ? fullItem : null);
+            const detailsHtml = itemData ? formatPlayerEquipmentData(itemData, fullItem.category) : '';
+
+            invHtml += `
+            <div style="background:rgba(255,255,255,0.05); border:1px solid var(--accent-gold); border-radius:4px; padding:0.8rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <strong>${fullItem.name || (typeof item === 'string' ? item : item.name)}</strong>
+                    <button class="btn btn-outline" style="padding:0.2rem 0.6rem; font-size:0.75rem;" onclick="unequipItem(${char.id}, ${idx})"><i class="fas fa-arrow-down" style="margin-right:5px;"></i> Guardar</button>
+                </div>
+                ${detailsHtml ? `<div style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-top:0.5rem;">${detailsHtml}</div>` : ''}
+            </div>`;
         });
+    } else {
+        invHtml += `<p style="color:var(--text-muted); font-size:0.9rem;">Nenhum item equipado no momento.</p>`;
     }
 
-    // Backpack addition interface
-    invHtml += `</div><p><strong>Mochila:</strong></p>
-    <ul id="backpack-list-${char.id}" style="list-style:none; padding:0; margin-bottom:1rem;">`;
+    invHtml += `</div>
+    <h4 style="color:var(--text-light); margin-bottom:0.8rem; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:0.5rem;">Mochila (${char.inventory.bag?.length || 0}/10 slots)</h4>
+    <div style="display:flex; flex-direction:column; gap:0.5rem; margin-bottom:1rem;">`;
+
     if (char.inventory.bag && char.inventory.bag.length) {
-        char.inventory.bag.forEach((i, idx) => invHtml += `
-            <li style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                <span><i class="fas fa-caret-right" style="color:var(--text-muted); font-size:0.8rem; margin-right:5px;"></i> ${i}</span>
-                <span style="color:#e74c3c; cursor:pointer;" onclick="removeItem(${char.id}, ${idx})"><i class="fas fa-times"></i></span>
-            </li>`);
+        char.inventory.bag.forEach((item, idx) => {
+            const itemName = typeof item === 'string' ? item : item.name;
+
+            // Tenta identificar se o item da mochila existe no catalogo para mostrar info rápida (OPCIONAL)
+            let fullItem = window.DH_EQUIPMENT.find(e => (e.id && item.id && e.id === item.id) || e.name === itemName);
+            const itemData = fullItem ? (fullItem.data || fullItem) : (typeof item === 'object' ? item.details || item : null);
+            const detailsHtml = itemData ? formatPlayerEquipmentData(itemData, fullItem?.category) : '';
+
+            invHtml += `
+            <div style="background:rgba(0,0,0,0.3); padding:0.6rem; border-radius:4px; border:1px solid var(--glass-border); margin-bottom: 0.3rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span><i class="fas fa-briefcase" style="color:var(--text-muted); font-size:0.8rem; margin-right:5px;"></i> ${itemName}</span>
+                    <div style="display:flex; gap:0.4rem;">
+                        <button class="btn btn-outline" style="padding:0.2rem 0.6rem; font-size:0.75rem; border-color:#2ecc71; color:#2ecc71;" onclick="equipItem(${char.id}, ${idx})">Equipar</button>
+                        <button class="btn btn-outline" style="padding:0.2rem 0.5rem; font-size:0.75rem; border-color:#e74c3c; color:#e74c3c;" onclick="dropItem(${char.id}, ${idx})" title="Descartar"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>
+                ${detailsHtml ? `<div style="display:flex; flex-wrap:wrap; gap:0.3rem; margin-top:0.4rem; opacity:0.8; transform: scale(0.9); transform-origin: left center;">${detailsHtml}</div>` : ''}
+            </div>`;
+        });
+    } else {
+        invHtml += `<p style="color:var(--text-muted); font-size:0.9rem;">Sua mochila está vazia.</p>`;
     }
-    invHtml += `</ul>
-    <div style="display:flex; gap:0.5rem;">
-        <input type="text" id="add-item-input-${char.id}" placeholder="Novo item..." style="flex-grow:1; padding:0.4rem; background:rgba(0,0,0,0.5); border:1px solid var(--glass-border); color:white; border-radius:4px;">
-        <button class="btn btn-sm" onclick="addItem(${char.id})" style="background:#2ecc71; color:white; border:none; padding:0 1rem;">Add</button>
-    </div>`;
+
+    invHtml += `</div>`;
 
     // Cards
     let cardsHtml = '';
@@ -1124,10 +1204,92 @@ window.showItemDetails = function (encodedItem) {
 // -------------------------------------------------------------
 // Core Interactive Handlers
 // -------------------------------------------------------------
+window.equipItem = async function (charId, bagIndex) {
+    try {
+        let charToUpdate = window.currentPlayingCharacter && window.currentPlayingCharacter.id == charId ? window.currentPlayingCharacter : (window.chars ? window.chars.find(c => c.id == charId) : null);
+        if (!charToUpdate) throw new Error("Character instance not found.");
+
+        if (!Array.isArray(charToUpdate.inventory.equipped)) {
+            charToUpdate.inventory.equipped = charToUpdate.inventory.equipped ? Object.values(charToUpdate.inventory.equipped) : [];
+        }
+        if (!Array.isArray(charToUpdate.inventory.bag)) {
+            charToUpdate.inventory.bag = charToUpdate.inventory.bag ? Object.values(charToUpdate.inventory.bag) : [];
+        }
+
+        const item = charToUpdate.inventory.bag[bagIndex];
+        if (!item) throw new Error("Item not found in bag.");
+
+        charToUpdate.inventory.bag.splice(bagIndex, 1);
+        charToUpdate.inventory.equipped.push(item);
+
+        await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: charToUpdate.inventory });
+        renderCharacterSheet(charToUpdate, document.getElementById('player-dynamic-area'));
+    } catch (e) {
+        console.error(e);
+        alert("Erro ao equipar: " + e.message);
+    }
+};
+
+window.unequipItem = async function (charId, equipIndex) {
+    try {
+        let charToUpdate = window.currentPlayingCharacter && window.currentPlayingCharacter.id == charId ? window.currentPlayingCharacter : (window.chars ? window.chars.find(c => c.id == charId) : null);
+        if (!charToUpdate) throw new Error("Character instance not found.");
+
+        if (!Array.isArray(charToUpdate.inventory.equipped)) {
+            charToUpdate.inventory.equipped = charToUpdate.inventory.equipped ? Object.values(charToUpdate.inventory.equipped) : [];
+        }
+        if (!Array.isArray(charToUpdate.inventory.bag)) {
+            charToUpdate.inventory.bag = charToUpdate.inventory.bag ? Object.values(charToUpdate.inventory.bag) : [];
+        }
+
+        const item = charToUpdate.inventory.equipped[equipIndex];
+        if (!item) throw new Error("Item not found in equipment.");
+
+        charToUpdate.inventory.equipped.splice(equipIndex, 1);
+        charToUpdate.inventory.bag.push(item);
+
+        await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: charToUpdate.inventory });
+        renderCharacterSheet(charToUpdate, document.getElementById('player-dynamic-area'));
+    } catch (e) {
+        console.error(e);
+        alert("Erro ao guardar: " + e.message);
+    }
+};
+
+window.dropItem = async function (charId, bagIndex) {
+    try {
+        let charToUpdate = window.currentPlayingCharacter && window.currentPlayingCharacter.id == charId ? window.currentPlayingCharacter : (window.chars ? window.chars.find(c => c.id == charId) : null);
+        if (!charToUpdate) throw new Error("Character instance not found.");
+
+        if (!confirm("Tem certeza que deseja descartar este item da mochila permanentemente?")) return;
+
+        if (!Array.isArray(charToUpdate.inventory.bag)) {
+            charToUpdate.inventory.bag = charToUpdate.inventory.bag ? Object.values(charToUpdate.inventory.bag) : [];
+        }
+        charToUpdate.inventory.bag.splice(bagIndex, 1);
+
+        await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: charToUpdate.inventory });
+        renderCharacterSheet(charToUpdate, document.getElementById('player-dynamic-area'));
+    } catch (e) {
+        console.error(e);
+        alert("Erro ao excluir: " + e.message);
+    }
+};
+
 window.addItem = async function (charId) {
     const el = document.getElementById(`add-item-input-${charId}`);
     if (el && el.value.trim().length > 0) {
-        await updateResource(charId, 'add_bag', el.value.trim());
+        if (!currentPlayingCharacter.inventory.bag) currentPlayingCharacter.inventory.bag = [];
+
+        const fullItem = (window.DH_EQUIPMENT || []).find(e => e.name === el.value.trim());
+        if (fullItem) {
+            currentPlayingCharacter.inventory.bag.push({ id: fullItem.id, name: fullItem.name });
+        } else {
+            currentPlayingCharacter.inventory.bag.push(el.value.trim());
+        }
+
+        await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: currentPlayingCharacter.inventory });
+        renderCharacterSheet(currentPlayingCharacter, document.getElementById('player-dynamic-area'));
         el.value = '';
     }
 };
@@ -1187,6 +1349,201 @@ window.joinCampaign = async function (charId) {
 // -------------------------------------------------------------
 // Core Initialization Call
 // -------------------------------------------------------------
+// -------------------------------------------------------------
+// Interactive Shop Handlers
+// -------------------------------------------------------------
+window.formatGold = (amount) => {
+    if (!amount || amount === 0) return '0 (Nenhum trocado)';
+    let chests = Math.floor(amount / 100);
+    let bags = Math.floor((amount % 100) / 10);
+    let handfuls = amount % 10;
+    let p = [];
+    if (chests > 0) p.push(`${chests} Baú${chests > 1 ? 's' : ''}`);
+    if (bags > 0) p.push(`${bags} Saco${bags > 1 ? 's' : ''}`);
+    if (handfuls > 0) p.push(`${handfuls} Punhado${handfuls > 1 ? 's' : ''}`);
+    return p.join(' e ') + ` <span style="font-size:0.75rem; color:var(--text-muted);">(${amount})</span>`;
+};
+
+window.parseGoldCost = (costStr) => {
+    if (!costStr) return 0;
+    const s = String(costStr).toLowerCase();
+    const num = parseInt(s) || 0;
+    if (s.includes('baú') || s.includes('bau')) return num * 100;
+    if (s.includes('bolsa') || s.includes('saco')) return num * 10;
+    return num; // Default case is punhados (handfuls)
+};
+
+window.openPlayerShop = async function () {
+    if (!window.currentPlayingCharacter) {
+        alert("Nenhum personagem selecionado. Abra a ficha de um herói primeiro.");
+        return;
+    }
+    if (!window.currentPlayingCharacter.shop_open) {
+        alert("Ouve-se apenas o vento. O Mestre está com o mercado fechado no momento.");
+        return;
+    }
+
+    // Refresh equipment list to ensure we see newly "Liberado" items
+    try {
+        const eqRes = await apiCall('equipment.php?action=list');
+        window.DH_EQUIPMENT = eqRes.equipment || [];
+    } catch (e) {
+        console.error("Erro ao atualizar catálogo para o jogador:", e);
+    }
+
+    const gold = window.currentPlayingCharacter.inventory?.gold || 0;
+    document.getElementById('player-shop-gold-display').innerHTML = formatGold(gold);
+    document.getElementById('player-shop-search').value = '';
+    document.getElementById('player-shop-category').value = 'all';
+    document.getElementById('player-shop-modal').style.display = 'flex';
+    renderPlayerShopItems();
+};
+
+window.filterPlayerShop = function () {
+    renderPlayerShopItems();
+};
+
+window.renderPlayerShopItems = function () {
+    const term = (document.getElementById('player-shop-search')?.value || '').toLowerCase();
+    const cat = document.getElementById('player-shop-category')?.value || 'all';
+    const container = document.getElementById('player-shop-items'); // Fixed ID
+    if (!container) return;
+
+    let html = '';
+    console.log("Rendering shop. DH_EQUIPMENT:", (window.DH_EQUIPMENT || []).length);
+
+    const visibleItems = (window.DH_EQUIPMENT || []).filter(item => {
+        const isVis = item.is_visible === true || item.is_visible === 1 || item.is_visible === "1";
+        if (!isVis) return false;
+        const matchesTerm = item.name.toLowerCase().includes(term);
+        const matchesCat = cat === 'all' || item.category === cat;
+        return matchesTerm && matchesCat;
+    });
+
+    if (visibleItems.length === 0) {
+        container.innerHTML = '<p style="color:var(--text-muted); text-align:center; padding:2rem; grid-column: 1 / -1;">Nenhum item à venda com estes filtros.</p>';
+        return;
+    }
+
+    visibleItems.forEach(item => {
+        const costVal = window.parseGoldCost(item.cost_base);
+        const playerGold = window.currentPlayingCharacter?.inventory?.gold || 0;
+        const canAfford = playerGold >= costVal;
+
+        html += `
+        <div class="glass-panel" style="background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); padding:1rem; border-radius:8px; display:flex; flex-direction:column; gap:0.5rem;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div>
+                    <strong style="font-size:1.1rem; color:var(--accent-gold); display:block; margin-bottom:0.2rem;">${item.name}</strong>
+                    <div style="color:var(--text-muted); font-size:0.8rem; text-transform:uppercase; letter-spacing:1px;">Tier ${item.tier} • ${item.category}</div>
+                </div>
+                <div style="color:#e78c3c; font-weight:bold; font-size:1.1rem;">
+                    <i class="fas fa-coins" style="margin-right:2px;"></i> ${item.cost_base}
+                </div>
+            </div>
+            
+            <div style="font-size:0.85rem; color:var(--text-light); line-height:1.4; flex-grow:1; margin:0.5rem 0;">
+                ${item.description || 'Nenhuma descrição disponível.'}
+            </div>
+
+            <div style="display:flex; gap:0.5rem; margin-top:auto;">
+                <button class="btn btn-outline" style="padding:0.4rem; font-size:0.8rem; flex:1;" onclick="showItemDetails('${encodeURIComponent(JSON.stringify(item))}')">Info</button>
+                <button class="btn ${canAfford ? 'btn-primary' : 'btn-outline'}" 
+                        style="padding:0.4rem; font-size:0.8rem; flex:2; ${!canAfford ? 'opacity:0.5; cursor:not-allowed; color:var(--text-muted);' : 'background:#2ecc71; border-color:#2ecc71; color:white;'}" 
+                        ${!canAfford ? 'disabled' : ''} 
+                        onclick="buyItem(${item.id}, ${costVal})">
+                    ${canAfford ? '<i class="fas fa-shopping-cart"></i> Comprar' : 'Sem Ouro'}
+                </button>
+            </div>
+        </div>`;
+    });
+
+    container.innerHTML = html;
+};
+
+window.buyItem = async function (itemId, costVal) {
+    if (!window.currentPlayingCharacter) return;
+
+    if (window.currentPlayingCharacter.inventory.gold < costVal) {
+        alert("Você não tem ouro suficiente.");
+        return;
+    }
+
+    const item = window.DH_EQUIPMENT.find(e => e.id === itemId);
+    if (!item) return;
+
+    if (!confirm(`Deseja comprar ${item.name} por ${item.cost_base}?`)) return;
+
+    // Deduct gold
+    window.currentPlayingCharacter.inventory.gold -= costVal;
+
+    // Add to bag
+    if (!Array.isArray(window.currentPlayingCharacter.inventory.bag)) {
+        window.currentPlayingCharacter.inventory.bag = [];
+    }
+    window.currentPlayingCharacter.inventory.bag.push({ id: item.id, name: item.name });
+
+    try {
+        await apiCall('character.php?action=update_inventory', 'POST', {
+            id: window.currentPlayingCharacter.id,
+            inventory: window.currentPlayingCharacter.inventory
+        });
+
+        // Refresh UI
+        document.getElementById('player-shop-gold-display').innerText = formatGold(window.currentPlayingCharacter.inventory.gold || 0);
+        renderPlayerShopItems(); // Re-render to update 'Comprar' buttons state
+        renderCharacterSheet(window.currentPlayingCharacter, document.getElementById('player-dynamic-area'));
+
+        alert(`Você comprou ${item.name} com sucesso! O item foi enviado para a sua Mochila.`);
+
+    } catch (e) {
+        // Rollback on failure
+        window.currentPlayingCharacter.inventory.gold += costVal;
+        window.currentPlayingCharacter.inventory.bag.pop();
+        alert("Erro ao comprar item: " + e.message);
+    }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     initPlayerView();
 });
+
+window.showItemDetails = function (itemJsonEncoded) {
+    try {
+        const item = JSON.parse(decodeURIComponent(itemJsonEncoded));
+        const container = document.getElementById('player-item-info-content');
+        if (!container) return;
+
+        const badges = window.formatPlayerEquipmentData ? window.formatPlayerEquipmentData(item.data || {}, item.category) : '';
+
+        container.innerHTML = `
+            <div style="text-align:center; margin-bottom:1.5rem;">
+                <h2 style="color:var(--accent-gold); font-family:var(--font-heading); margin-bottom:0.2rem;">${item.name}</h2>
+                <div style="color:var(--text-muted); font-size:0.9rem; text-transform:uppercase; letter-spacing:1.5px;">Tier ${item.tier} • ${item.category}</div>
+            </div>
+
+            <div style="background:rgba(255,255,255,0.05); padding:1.5rem; border-radius:8px; border:1px solid var(--glass-border); margin-bottom:1.5rem;">
+                <p style="font-size:1.1rem; line-height:1.6; color:var(--text-light); margin-bottom:1rem; text-align:center;">
+                    ${item.description || 'Nenhuma descrição detalhada.'}
+                </p>
+                ${badges ? `<div style="display:flex; flex-wrap:wrap; gap:0.5rem; justify-content:center; padding-top:1rem; border-top:1px solid rgba(255,255,255,0.1);">${badges}</div>` : ''}
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; font-size:0.9rem;">
+                <div style="background:rgba(0,0,0,0.3); padding:0.8rem; border-radius:6px; text-align:center;">
+                    <div style="color:var(--text-muted); margin-bottom:0.2rem;">Preço</div>
+                    <div style="color:#f1c40f; font-weight:bold; font-size:1.1rem;">${item.cost_base}</div>
+                </div>
+                <div style="background:rgba(0,0,0,0.3); padding:0.8rem; border-radius:6px; text-align:center;">
+                    <div style="color:var(--text-muted); margin-bottom:0.2rem;">Peso</div>
+                    <div style="color:var(--text-light); font-weight:bold; font-size:1.1rem;">${(item.data && item.data.slots) ? item.data.slots : '1'} Slot(s)</div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('player-item-info-modal').style.display = 'flex';
+    } catch (e) {
+        console.error("Erro ao mostrar detalhes:", e);
+    }
+};
+

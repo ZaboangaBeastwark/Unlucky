@@ -23,6 +23,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $logs = $stmt->fetchAll();
 
     jsonResponse(['logs' => $logs]);
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $input = json_decode(file_get_contents('php://input'), true);
+    if (($input['action'] ?? '') === 'delete') {
+        if ($_SESSION['role'] !== 'gm') {
+            jsonResponse(['error' => 'Apenas Mestres podem excluir registros'], 403);
+        }
+        $logId = $input['id'] ?? null;
+        if (!$logId)
+            jsonResponse(['error' => 'ID do logausente'], 400);
+
+        $stmt = $pdo->prepare('DELETE FROM action_logs WHERE id = ?');
+        $stmt->execute([$logId]);
+        jsonResponse(['message' => 'Registro excluído']);
+    }
 }
 
 jsonResponse(['error' => 'Invalid method'], 405);

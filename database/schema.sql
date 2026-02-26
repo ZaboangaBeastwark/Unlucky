@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS characters (
     experiences JSON, -- [{"name": "Sneaky", "value": 2}]
     cards JSON, -- Active domain cards
     roleplay_answers JSON, -- Answers to class-specific roleplay questions
+    secret_note TEXT, -- Secret GM note
     
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -84,3 +85,16 @@ CREATE TABLE IF NOT EXISTS action_logs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS equipment (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    category ENUM('primary_weapon', 'secondary_weapon', 'armor', 'adventure_item', 'consumable', 'professional_kit') NOT NULL,
+    tier INT DEFAULT 1,
+    cost_base VARCHAR(50) DEFAULT '0',
+    is_visible BOOLEAN DEFAULT TRUE,
+    data JSON,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+

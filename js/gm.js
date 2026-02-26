@@ -3,15 +3,21 @@
 let gmState = {
     session: null,
     characters: [],
-    adversaries: []
+    adversaries: [],
+    equipment: [],
+    activeTab: 'session' // 'session' or 'catalog'
 };
 
 async function initGmView() {
     const container = document.getElementById('gm-dynamic-area');
-    container.innerHTML = `<div class="glass-panel" style="padding: 2rem; text-align: center;">Carregando sessão...</div>`;
+    container.innerHTML = `<div class="glass-panel" style="padding: 2rem; text-align: center;">Carregando painel...</div>`;
 
     try {
         const res = await apiCall('gm.php?action=session_data');
+        const eqRes = await apiCall('equipment.php?action=list');
+
+        gmState.equipment = eqRes.equipment || [];
+
         if (res.session) {
             gmState.session = res.session;
             gmState.characters = res.characters;
@@ -48,7 +54,30 @@ async function createGmSession() {
     }
 }
 
+window.switchGmTab = function (tabName) {
+    gmState.activeTab = tabName;
+    initGmView(); // Re-fetch to guarantee fresh data
+}
+
 function renderGmDashboard(container) {
+    let tabsHtml = `
+        <div style="margin-bottom: 1.5rem; display:flex; gap:1rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+            <button onclick="switchGmTab('session')" style="background:none; border:none; color:${gmState.activeTab === 'session' ? 'var(--accent-gold)' : 'white'}; padding:0.5rem 1rem; cursor:pointer; border-bottom: ${gmState.activeTab === 'session' ? '2px solid var(--accent-gold)' : 'none'}; font-weight: ${gmState.activeTab === 'session' ? 'bold' : 'normal'}; font-size:1.1rem;">Sessão Ativa</button>
+            <button onclick="switchGmTab('catalog')" style="background:none; border:none; color:${gmState.activeTab === 'catalog' ? 'var(--accent-gold)' : 'white'}; padding:0.5rem 1rem; cursor:pointer; border-bottom: ${gmState.activeTab === 'catalog' ? '2px solid var(--accent-gold)' : 'none'}; font-weight: ${gmState.activeTab === 'catalog' ? 'bold' : 'normal'}; font-size:1.1rem;">Catálogo de Equipamentos</button>
+        </div>
+        <div id="gm-tab-content"></div>
+    `;
+    container.innerHTML = tabsHtml;
+
+    const contentArea = document.getElementById('gm-tab-content');
+    if (gmState.activeTab === 'session') {
+        renderGmSessionTab(contentArea);
+    } else {
+        renderGmCatalogTab(contentArea);
+    }
+}
+
+function renderGmSessionTab(container) {
     const s = gmState.session;
 
     const activeChars = gmState.characters.filter(c => c.session_status === 'approved');
@@ -120,15 +149,23 @@ function renderGmDashboard(container) {
     });
 
     container.innerHTML = `
-        <div class="sheet-header glass-panel" style="border-left: 4px solid var(--accent-purple);">
+        <div class="sheet-header glass-panel" style="border-left: 4px solid var(--accent-purple); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
             <div class="sheet-title">
                 <h2>${s.name} <span style="font-size:1rem; color:var(--text-muted);">(ID: ${s.id})</span></h2>
             </div>
-            <div style="display:flex; align-items:center; gap:1rem; background:rgba(0,0,0,0.5); padding:0.5rem 1.5rem; border-radius:20px; border:1px solid var(--accent-purple);">
-                <span style="font-size:0.9rem; text-transform:uppercase; letter-spacing:1px;">Economia de Medo</span>
-                <button class="btn btn-outline" style="padding:0.2rem 0.8rem;" onclick="updateFear(${s.id}, -1)">-</button>
-                <span style="font-size:1.5rem; font-weight:bold; color:var(--accent-purple); min-width:30px; text-align:center;">${s.fear_tokens}</span>
-                <button class="btn btn-outline" style="padding:0.2rem 0.8rem;" onclick="updateFear(${s.id}, 1)">+</button>
+            <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+                <div style="display:flex; align-items:center; gap:1rem; background:rgba(0,0,0,0.5); padding:0.5rem 1.5rem; border-radius:20px; border:1px solid var(--accent-gold);">
+                    <span style="font-size:0.9rem; text-transform:uppercase; letter-spacing:1px; color:var(--accent-gold);"><i class="fas fa-store"></i> Mercado</span>
+                    <button class="btn ${s.shop_open ? 'btn-primary' : 'btn-outline'}" style="padding:0.2rem 0.8rem; ${s.shop_open ? 'background:#2ecc71; border-color:#2ecc71; color:white;' : 'color:var(--text-muted);'}" onclick="toggleShop(${s.id}, ${s.shop_open ? 0 : 1})">
+                        ${s.shop_open ? 'Aberto' : 'Fechado'}
+                    </button>
+                </div>
+                <div style="display:flex; align-items:center; gap:1rem; background:rgba(0,0,0,0.5); padding:0.5rem 1.5rem; border-radius:20px; border:1px solid var(--accent-purple);">
+                    <span style="font-size:0.9rem; text-transform:uppercase; letter-spacing:1px;">Economia de Medo</span>
+                    <button class="btn btn-outline" style="padding:0.2rem 0.8rem;" onclick="updateFear(${s.id}, -1)">-</button>
+                    <span style="font-size:1.5rem; font-weight:bold; color:var(--accent-purple); min-width:30px; text-align:center;">${s.fear_tokens}</span>
+                    <button class="btn btn-outline" style="padding:0.2rem 0.8rem;" onclick="updateFear(${s.id}, 1)">+</button>
+                </div>
             </div>
         </div>
 
@@ -181,12 +218,34 @@ async function updateFear(sessionId, amount) {
 async function overridePlayerStat(charId, field, value) {
     if (value === null || value === '') return;
     try {
+        const finalVal = parseInt(value);
+        if (isNaN(finalVal)) {
+            alert('Valor inválido. Por favor, insira um número.');
+            return;
+        }
         await apiCall('gm.php?action=override_player_stat', 'POST', {
-            character_id: charId, field, value: parseInt(value), session_id: gmState.session.id
+            session_id: gmState.session.id,
+            character_id: charId,
+            field: field,
+            value: finalVal
         });
         initGmView();
-    } catch (e) { alert(e.message); }
+    } catch (e) {
+        alert('Erro ao alterar stat: ' + e.message);
+    }
 }
+
+window.toggleShop = async function (sessionId, isOpen) {
+    try {
+        await apiCall('gm.php?action=toggle_shop', 'POST', {
+            session_id: sessionId,
+            is_open: isOpen
+        });
+        initGmView();
+    } catch (e) {
+        alert('Erro ao alterar mercado: ' + e.message);
+    }
+};
 
 function showAddAdversaryForm() {
     document.getElementById('add-adv-form').style.display = 'block';
@@ -236,4 +295,276 @@ async function rejectCharacter(charId, sessionId) {
         await apiCall('gm.php?action=reject_character', 'POST', { character_id: charId, session_id: sessionId });
         initGmView();
     } catch (e) { alert(e.message); }
+}
+
+// =====================================
+// EQUIPMENT CATALOG TAB
+// =====================================
+function formatEquipmentData(data, category) {
+    if (!data || Object.keys(data).length === 0) return '<em>Nenhum atributo numérico especial. Consulte a descrição.</em>';
+
+    const keyMap = {
+        'damage': 'Dano',
+        'attr': 'Rolado com',
+        'slots': 'Espaços (Mãos)',
+        'armor_base': 'Pontos de Armadura',
+        'armor_slots': 'Slots de Quebra',
+        'evasion_mod': 'Evasão (Peso)',
+        'range': 'Alcance',
+        'uses': 'Usos Rápidos',
+        'healing': 'Poder de Cura',
+        'bonus': 'Bônus Passivo'
+    };
+
+    let htmlParts = [];
+    for (let key in data) {
+        let label = keyMap[key] || key;
+        let value = data[key];
+
+        if (key === 'evasion_mod' && value < 0) {
+            value = `<span style="color:#e74c3c">${value}</span>`;
+        } else if (key === 'damage') {
+            value = `<strong style="color:var(--accent-gold)">${value}</strong>`;
+        } else if (key === 'armor_base') {
+            value = `<strong style="color:#3498db">${value}</strong>`;
+        }
+
+        htmlParts.push(`<div style="background:rgba(0,0,0,0.3); padding:0.3rem 0.6rem; border-radius:4px; border:1px solid var(--glass-border);"><b>${label}:</b> ${value}</div>`);
+    }
+
+    return htmlParts.join('');
+}
+
+function renderGmCatalogTab(container) {
+    let eqHtml = `
+    <div class="glass-panel" style="padding: 1.5rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 2rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:1rem;">
+            <h2 style="color:var(--accent-gold); font-family: 'Crimson Text', serif;">Armazém do Mestre</h2>
+            <div style="display:flex; gap:1rem;">
+                <input type="text" id="gm-catalog-search" placeholder="Pesquisar item..." onkeyup="filterGmCatalog()" style="background:rgba(255,255,255,0.1); border:1px solid var(--glass-border); color:white; padding:0.5rem; border-radius:4px;">
+                <select id="gm-catalog-filter" onchange="filterGmCatalog()" style="background:rgba(255,255,255,0.1); border:1px solid var(--glass-border); color:white; padding:0.5rem; border-radius:4px;">
+                    <option value="all">Todas Categorias</option>
+                    <option value="primary_weapon">Arma Primária</option>
+                    <option value="secondary_weapon">Arma Secundária</option>
+                    <option value="armor">Armadura</option>
+                    <option value="adventure_item">Item de Aventura</option>
+                    <option value="consumable">Consumível</option>
+                    <option value="professional_kit">Kit Profissional</option>
+                </select>
+                <div style="display:flex; gap:0.5rem; margin-right:1rem; border-right:1px solid rgba(255,255,255,0.2); padding-right:1rem;">
+                    <button class="btn btn-outline" onclick="toggleBulkVisibility(true)" style="padding:0.4rem 0.8rem; font-size:0.8rem; color:#2ecc71; border-color:#2ecc71;" title="Marcar todos listados">
+                        <i class="fas fa-check-square"></i> Todos
+                    </button>
+                    <button class="btn btn-outline" onclick="toggleBulkVisibility(false)" style="padding:0.4rem 0.8rem; font-size:0.8rem; color:#e74c3c; border-color:#e74c3c;" title="Desmarcar todos listados">
+                        <i class="far fa-square"></i> Nenh.
+                    </button>
+                </div>
+                <button class="btn btn-primary" onclick="openGmItemModal()" style="box-shadow: 0 0 10px rgba(241,196,15,0.3);">+ Forjar Novo Item</button>
+            </div>
+        </div>
+        
+        <table style="width:100%; text-align:left; border-collapse:collapse;">
+            <thead>
+                <tr style="border-bottom: 1px solid rgba(241,196,15,0.5); color:var(--accent-gold);">
+                    <th style="padding:0.5rem;">Nome</th>
+                    <th style="padding:0.5rem;">Categoria</th>
+                    <th style="padding:0.5rem;">Tier</th>
+                    <th style="padding:0.5rem;">Custo</th>
+                    <th style="padding:0.5rem;">Visibilidade</th>
+                    <th style="padding:0.5rem; text-align:right;">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    const catNames = {
+        'primary_weapon': 'Arma Primária',
+        'secondary_weapon': 'Arma Secundária',
+        'armor': 'Armadura',
+        'adventure_item': 'Item de Aventura',
+        'consumable': 'Consumível',
+        'professional_kit': 'Kit Profissional'
+    };
+
+    gmState.equipment.forEach(item => {
+        const isVis = item.is_visible;
+        eqHtml += `
+            <tr class="gm-catalog-row" data-name="${item.name.toLowerCase()}" data-category="${item.category}" style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding:0.8rem 0.5rem; font-weight:bold;">${item.name}</td>
+                <td style="padding:0.8rem 0.5rem; color:var(--text-muted); font-size:0.9rem;">${catNames[item.category] || item.category}</td>
+                <td style="padding:0.8rem 0.5rem;">${item.tier}</td>
+                <td style="padding:0.8rem 0.5rem; color:#e78c3c; font-size:0.9rem;">${item.cost_base}</td>
+                <td style="padding:0.8rem 0.5rem;">
+                    <label style="display:flex; align-items:center; cursor:pointer;">
+                        <input type="checkbox" ${isVis ? 'checked' : ''} onchange="toggleEquipmentVisibility(${item.id}, this.checked)" style="margin-right:0.5rem; accent-color:var(--accent-gold);">
+                        <span style="font-size:0.85rem; color:${isVis ? '#2ecc71' : '#e74c3c'}">${isVis ? 'Liberado' : 'Oculto'}</span>
+                    </label>
+                </td>
+                <td style="padding:0.8rem 0.5rem; text-align:right;">
+                    <button class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size:0.8rem; border-color:#3498db; color:#3498db; margin-right:0.5rem;" onclick="toggleItemDetails(${item.id})">Ver Info</button>
+                    <button class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size:0.8rem;" onclick="openGmItemModal(${item.id})">Editar</button>
+                </td>
+            </tr>
+                <tr id="eq-details-${item.id}" style="display:none; background:rgba(0,0,0,0.5);">
+                <td colspan="6" style="padding:1rem;">
+                    <div style="color:var(--accent-gold); margin-bottom:0.8rem; font-size:0.95rem;"><b>Traços / Descrição:</b> <span style="color:var(--text-light); font-weight:normal;">${item.description || 'Nenhuma descrição detalhada cadastra.'}</span></div>
+                    <div style="font-size:0.85rem; display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center;">
+                        ${formatEquipmentData(item.data, item.category)}
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+
+    eqHtml += `
+            </tbody>
+        </table>
+    </div>
+    `;
+
+    container.innerHTML = eqHtml;
+    filterGmCatalog(); // apply filters if there was a re-render
+}
+
+window.filterGmCatalog = function () {
+    const term = (document.getElementById('gm-catalog-search')?.value || '').toLowerCase();
+    const cat = document.getElementById('gm-catalog-filter')?.value || 'all';
+
+    document.querySelectorAll('.gm-catalog-row').forEach(row => {
+        const matchesTerm = row.dataset.name.includes(term);
+        const matchesCat = cat === 'all' || row.dataset.category === cat;
+
+        row.style.display = (matchesTerm && matchesCat) ? 'table-row' : 'none';
+
+        // Hide expanded details if the parent row is hidden
+        const detailsId = row.nextElementSibling?.id;
+        if (detailsId && detailsId.startsWith('eq-details-') && (!matchesTerm || !matchesCat)) {
+            document.getElementById(detailsId).style.display = 'none';
+        }
+    });
+}
+
+async function toggleEquipmentVisibility(itemId, isVisible) {
+    try {
+        await apiCall('equipment.php?action=toggle_visibility', 'POST', {
+            id: itemId,
+            is_visible: isVisible ? 1 : 0
+        });
+        // Update local state without full reload
+        const item = gmState.equipment.find(e => e.id === itemId);
+        if (item) item.is_visible = isVisible;
+    } catch (e) {
+        alert("Erro ao alterar visibilidade: " + e.message);
+        initGmView(); // Reload to fix sync out of state
+    }
+}
+
+window.toggleBulkVisibility = async function (isVisible) {
+    const term = (document.getElementById('gm-catalog-search')?.value || '').toLowerCase();
+    const cat = document.getElementById('gm-catalog-filter')?.value || 'all';
+
+    // Find all item IDs that match the current filter search
+    const idsToUpdate = gmState.equipment.filter(item => {
+        const matchesTerm = item.name.toLowerCase().includes(term);
+        const matchesCat = cat === 'all' || item.category === cat;
+        // Only update items that actually need to change state
+        return matchesTerm && matchesCat && !!item.is_visible !== isVisible;
+    }).map(i => i.id);
+
+    if (idsToUpdate.length === 0) return; // Nothing to change
+
+    if (!confirm(`Deseja ${isVisible ? 'LIBERAR' : 'OCULTAR'} os ${idsToUpdate.length} itens listados atualmente?`)) return;
+
+    try {
+        await apiCall('equipment.php?action=toggle_visibility_bulk', 'POST', {
+            ids: idsToUpdate,
+            is_visible: isVisible ? 1 : 0
+        });
+
+        // Render again to reflect changes visually
+        initGmView();
+    } catch (e) {
+        alert("Erro ao alterar visibilidade em massa: " + e.message);
+    }
+};
+
+function toggleItemDetails(id) {
+    const el = document.getElementById(`eq-details-${id}`);
+    if (el) el.style.display = el.style.display === 'none' ? 'table-row' : 'none';
+}
+
+function openGmItemModal(itemId = null) {
+    document.getElementById('gm-item-form').reset();
+    document.getElementById('gm-item-id').value = '';
+    const modalTitle = document.getElementById('gm-item-modal-title');
+    const deleteBtn = document.getElementById('gm-item-delete-btn');
+
+    if (itemId) {
+        modalTitle.textContent = "Editar Item";
+        deleteBtn.style.display = "block";
+        const item = gmState.equipment.find(e => e.id === itemId);
+        if (item) {
+            document.getElementById('gm-item-id').value = item.id;
+            document.getElementById('gm-item-name').value = item.name;
+            document.getElementById('gm-item-category').value = item.category;
+            document.getElementById('gm-item-tier').value = item.tier;
+            document.getElementById('gm-item-cost').value = item.cost_base;
+            document.getElementById('gm-item-desc').value = item.description;
+            document.getElementById('gm-item-data').value = JSON.stringify(item.data, null, 2);
+        }
+    } else {
+        modalTitle.textContent = "Forjar Novo Item";
+        deleteBtn.style.display = "none";
+        document.getElementById('gm-item-tier').value = 1;
+        document.getElementById('gm-item-cost').value = '1 Punhado';
+    }
+
+    document.getElementById('gm-item-modal').style.display = 'flex';
+}
+
+async function saveGmItem() {
+    const id = document.getElementById('gm-item-id').value;
+    const name = document.getElementById('gm-item-name').value;
+    const category = document.getElementById('gm-item-category').value;
+    const tier = document.getElementById('gm-item-tier').value;
+    const cost_base = document.getElementById('gm-item-cost').value;
+    const description = document.getElementById('gm-item-desc').value;
+    const dataRaw = document.getElementById('gm-item-data').value;
+
+    if (!name) return alert("O nome do item é obrigatório!");
+
+    let parsedData = {};
+    if (dataRaw.trim() !== '') {
+        try {
+            parsedData = JSON.parse(dataRaw);
+        } catch (e) {
+            return alert("Erro no JSON de Estatísticas Específicas: " + e.message);
+        }
+    }
+
+    const payload = { id, name, category, tier, cost_base, description, data: parsedData };
+    const action = id ? 'update' : 'create';
+
+    try {
+        await apiCall(`equipment.php?action=${action}`, 'POST', payload);
+        document.getElementById('gm-item-modal').style.display = 'none';
+        initGmView(); // Reload catalog
+    } catch (e) {
+        alert("Erro ao salvar: " + e.message);
+    }
+}
+
+async function deleteGmItem() {
+    const id = document.getElementById('gm-item-id').value;
+    if (!id) return;
+
+    if (!confirm("Tem certeza que deseja desintegrar este item do Armazém? Ele desaparecerá das opções dos jogadores.")) return;
+
+    try {
+        await apiCall('equipment.php?action=delete', 'POST', { id });
+        document.getElementById('gm-item-modal').style.display = 'none';
+        initGmView();
+    } catch (e) {
+        alert("Erro ao excluir: " + e.message);
+    }
 }

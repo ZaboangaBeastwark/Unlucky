@@ -99,6 +99,22 @@ if ($method === 'GET') {
         jsonResponse(['message' => 'Adversary removed']);
     }
 
+    // Toggle Shop
+    if ($action === 'toggle_shop') {
+        $sessionId = $input['session_id'];
+        $isOpen = (isset($input['is_open']) && $input['is_open']) ? 1 : 0;
+
+        $stmt = $pdo->prepare('UPDATE sessions SET shop_open = ? WHERE id = ? AND gm_id = ?');
+        $stmt->execute([$isOpen, $sessionId, $_SESSION['user_id']]);
+
+        $statusText = $isOpen ? 'abriu' : 'fechou';
+        $logMsg = "O Mestre <b>{$statusText}</b> o Mercado para os jogadores.";
+        $stmtLog = $pdo->prepare('INSERT INTO action_logs (session_id, actor_name, action_type, message) VALUES (?, ?, ?, ?)');
+        $stmtLog->execute([$sessionId, 'Sistema', 'status_change', $logMsg]);
+
+        jsonResponse(['message' => "Shop $statusText"]);
+    }
+
     // Player Status Manipulation
     if ($action === 'override_player_stat') {
         $charId = $input['character_id'];
