@@ -1,5 +1,5 @@
-CREATE DATABASE IF NOT EXISTS daggerheart_proto CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE daggerheart_proto;
+CREATE DATABASE IF NOT EXISTS rpgbearhouse CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE rpgbearhouse;
 
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,

@@ -476,3 +476,97 @@ option {
     background-color: var(--bg-darker);
     color: var(--text-light);
 }
+
+/* Character Avatar Styles */
+.avatar-token {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 3px solid var(--accent-gold);
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.5), inset 0 0 10px rgba(0, 0, 0, 0.8);
+    object-fit: cover;
+    background-color: rgba(0, 0, 0, 0.6);
+    margin: 0 auto 10px auto;
+    display: block;
+}
+
+.avatar-token-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.avatar-full-container {
+    margin-bottom: 2rem;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    text-align: center;
+}
+
+.avatar-full-img {
+    max-width: 100%;
+    max-height: 400px;
+    border-radius: 8px;
+    border: 2px solid var(--accent-gold);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+    object-fit: contain;
+    background-color: #000;
+}
+
+/* =========================================================================
+   PDF EXPORT MODE STYLES
+   These styles apply temporarily when html2pdf is rendering the character sheet,
+   ensuring solid backgrounds, high contrast, and preventing awkward page breaks.
+   ========================================================================= */
+.pdf-export-mode {
+    background: #0f0f13 !important;
+    /* Solid dark background instead of any gradients or images */
+    color: #ffffff !important;
+}
+
+.pdf-export-mode .glass-panel {
+    background: #1e1e24 !important;
+    /* Solid color instead of rgba transparency */
+    border: 1px solid #333 !important;
+    box-shadow: none !important;
+    /* Remove shadows to prevent render glitches */
+    page-break-inside: avoid;
+    /* Prevent panel from splitting across pages */
+    margin-bottom: 20px !important;
+}
+
+.pdf-export-mode .sheet-section {
+    page-break-inside: avoid;
+    background: #1e1e24 !important;
+}
+
+/* Ensure inner transparent panels (like the questions/skills) are solid for contrast */
+.pdf-export-mode div[style*="background:rgba("],
+.pdf-export-mode div[style*="background: rgba("] {
+    background: #2a2a35 !important;
+}
+
+/* Specific text contrasts */
+.pdf-export-mode .text-muted,
+.pdf-export-mode [style*="color:var(--text-muted)"],
+.pdf-export-mode [style*="color: var(--text-muted)"] {
+    color: #b0b0b0 !important;
+}
+
+.pdf-export-mode h3,
+.pdf-export-mode h4 {
+    page-break-after: avoid;
+}
+
+.pdf-export-mode .sheet-grid {
+    display: block !important;
+    /* Sometimes grid behaves weirdly in canvas splitting. Block might stack them nicely if needed, or we can keep grid but with explicit breaks */
+}
+
+/* If we want to keep the 2-column layout in PDF grid, we ensure it doesn't break */
+.pdf-export-mode .sheet-col {
+    width: 100% !important;
+    /* Force single column for better PDF readability and flow */
+    margin-bottom: 20px;
+}

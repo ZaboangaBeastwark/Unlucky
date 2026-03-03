@@ -23,12 +23,71 @@ async function initGmView() {
             gmState.characters = res.characters;
             gmState.adversaries = res.adversaries;
             renderGmDashboard(container);
+            startGmPolling(); // Initialize auto-sync
         } else {
             renderCreateSession(container);
         }
     } catch (e) {
         container.innerHTML = `<div class="error-msg">Erro do Mestre: ${e.message}</div>`;
     }
+}
+
+let gmPollInterval;
+function startGmPolling() {
+    if (gmPollInterval) clearInterval(gmPollInterval);
+
+    gmPollInterval = setInterval(async () => {
+        try {
+            // Fetch raw JSON to avoid state mutation before comparison
+            const rawRes = await fetch(`${API_BASE}gm.php?action=session_data`, { cache: 'no-store' });
+            const data = await rawRes.json();
+
+            if (data.session) {
+                const s1 = JSON.stringify(gmState.characters);
+                const s2 = JSON.stringify(data.characters);
+
+                const a1 = JSON.stringify(gmState.adversaries);
+                const a2 = JSON.stringify(data.adversaries);
+
+                let needsRender = false;
+
+                if (s1 !== s2) {
+                    gmState.characters = data.characters;
+                    needsRender = true;
+                }
+
+                if (a1 !== a2) {
+                    gmState.adversaries = data.adversaries;
+                    needsRender = true;
+                }
+
+                if (needsRender) {
+                    const scrollY = window.scrollY;
+                    const scrollX = window.scrollX;
+
+                    // If viewing a specific character sheet, re-render it
+                    if (window.viewingCharId) {
+                        const updatedChar = gmState.characters.find(c => c.id === window.viewingCharId);
+                        if (updatedChar) {
+                            openGmCharacterSheet(updatedChar.id);
+                        } else {
+                            // Character was deleted or removed
+                            window.viewingCharId = null;
+                            initGmView();
+                        }
+                    } else if (gmState.activeTab === 'session') {
+                        // Re-render dashboard
+                        const container = document.getElementById('gm-tab-content');
+                        if (container) renderGmSessionTab(container);
+                    }
+
+                    window.scrollTo(scrollX, scrollY);
+                }
+            }
+        } catch (e) {
+            console.error("Erro no polling do GM:", e);
+        }
+    }, 2000);
 }
 
 function renderCreateSession(container) {
@@ -88,21 +147,31 @@ function renderGmSessionTab(container) {
 
     activeChars.forEach(c => {
         charsHtml += `
-            <div style="background:rgba(0,0,0,0.3); padding:1rem; border-radius:8px; border:1px solid var(--glass-border); margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <div style="background:rgba(0,0,0,0.3); padding:1.2rem; border-radius:8px; border:1px solid var(--accent-gold); margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; transition: transform 0.2s;" onmouseover="this.style.boxShadow='0 0 10px rgba(241,196,15,0.2)';" onmouseout="this.style.boxShadow='none';">
                 <div style="flex-grow:1; min-width:200px;">
-                    <h4 style="color:var(--accent-gold); margin-bottom:0.2rem;">${c.name}</h4>
-                    <span style="font-size:0.8rem; color:var(--text-muted);">${c.class} Nv${c.level}</span>
-                    ${c.secret_note ? `<div style="margin-top:0.5rem;"><button class="btn btn-sm" onclick="alert('Segredo de ${c.name}:\\n\\n' + \`${c.secret_note.replace(/`/g, '\\`')}\`)" style="background:transparent; border:1px dashed #9b59b6; color:#9b59b6; font-size:0.75rem; padding:0.2rem 0.5rem;"><i class="fas fa-user-secret"></i> Ver Segredo</button></div>` : ''}
+                    <h4 style="color:var(--accent-gold); margin-bottom:0.3rem; font-size:1.3rem; display:flex; align-items:center; gap:0.5rem; cursor:pointer;" onclick="openGmCharacterSheet(${c.id})" title="Clique para Abrir a Ficha do Jogador">
+                        <i class="fas fa-file-alt" style="font-size:1rem; opacity:0.7;"></i> ${c.name} 
+                    </h4>
+                    <div style="font-size:0.9rem; margin-bottom:0.3rem; color:var(--text-light);">
+                        Jogador: <strong style="color:#3498db;">${c.player_name || 'Desconhecido'}</strong>
+                    </div>
+                    <div style="font-size:0.85rem; color:var(--text-muted);">
+                        Nível ${c.level} ${c.class} (${c.subclass || 'Sem Subclasse'}) 
+                        <span style="margin-left:1rem; padding:0.2rem 0.6rem; border-radius:4px; background:rgba(231,140,60,0.1); color:#e78c3c; border:1px solid rgba(231,140,60,0.3);">XP Atual: <b>${c.xp || 0}</b></span>
+                        ${(parseInt(c.xp || 0) >= 6 && c.can_level_up == 0) ? `<button class="btn btn-sm" onclick="allowLevelUp(${c.id})" style="margin-left:1rem; background:linear-gradient(135deg, #2ecc71, #27ae60); border:none; color:white; padding:0.2rem 0.6rem;">Permitir Subir de Nível <i class="fas fa-arrow-up"></i></button>` : ''}
+                    </div>
+                    ${c.secret_note ? `<div style="margin-top:0.8rem;"><button class="btn btn-sm" onclick="alert('Segredo de ${c.name}:\\n\\n' + \`${c.secret_note.replace(/`/g, '\\`')}\`)" style="background:transparent; border:1px dashed #9b59b6; color:#9b59b6; font-size:0.75rem; padding:0.2rem 0.5rem;"><i class="fas fa-user-secret"></i> Ver Nota Secreta</button></div>` : ''}
                 </div>
-                <div style="display:flex; gap:1.5rem; text-align:center;">
-                    <div><span style="font-size:0.8rem; display:block;">PV</span><b>${c.hp_current}</b></div>
-                    <div><span style="font-size:0.8rem; display:block;">Stress</span><b>${c.stress_current}</b></div>
+                <div style="display:flex; gap:1.5rem; text-align:center; align-items:center;">
+                    <div><span style="font-size:0.8rem; display:block; color:var(--text-muted);">PV</span><b style="font-size:1.2rem;">${c.hp_current}</b></div>
+                    <div><span style="font-size:0.8rem; display:block; color:var(--text-muted);">Stress</span><b style="font-size:1.2rem;">${c.stress_current}</b></div>
                     <div>
-                        <span style="font-size:0.8rem; display:block;">Evasão</span>
-                        <b style="color:var(--accent-purple); cursor:pointer;" onclick="overridePlayerStat(${c.id}, 'evasion_current_override', prompt('Novo valor de Evasão?'))">
-                            ${c.evasion_current_override ?? c.evasion_base} ✎
+                        <span style="font-size:0.8rem; display:block; color:var(--text-muted);">Evasão</span>
+                        <b style="color:var(--accent-purple); cursor:pointer; font-size:1.2rem;" onclick="overridePlayerStat(${c.id}, 'evasion_current_override', prompt('Novo valor de Evasão?'))" title="Editar Evasão Manualmente">
+                            ${c.evasion_current_override ?? c.evasion_base} <i class="fas fa-pencil-alt" style="font-size:0.8rem;"></i>
                         </b>
                     </div>
+                    <button class="btn btn-primary" onclick="openGmCharacterSheet(${c.id})" style="padding:0.6rem 1.2rem; font-size:0.95rem; display:flex; gap:0.5rem; align-items:center; background:#f1c40f; color:#0f0f13; border:none; font-weight:bold;">Selecionar <i class="fas fa-play"></i></button>
                 </div>
             </div>
         `;
@@ -215,6 +284,16 @@ async function updateFear(sessionId, amount) {
     } catch (e) { console.error(e); }
 }
 
+window.allowLevelUp = async function (charId) {
+    if (!confirm("Tem certeza que deseja permitir que este personagem suba de nível?")) return;
+    try {
+        await apiCall('character.php?action=allow_level_up', 'POST', { character_id: charId });
+        initGmView();
+    } catch (e) {
+        alert("Erro ao autorizar subida de nível: " + e.message);
+    }
+};
+
 async function overridePlayerStat(charId, field, value) {
     if (value === null || value === '') return;
     try {
@@ -223,15 +302,21 @@ async function overridePlayerStat(charId, field, value) {
             alert('Valor inválido. Por favor, insira um número.');
             return;
         }
-        await apiCall('gm.php?action=override_player_stat', 'POST', {
+        const payload = {
             session_id: gmState.session.id,
             character_id: charId,
             field: field,
             value: finalVal
-        });
-        initGmView();
+        };
+        await apiCall('gm.php?action=override_player_stat', 'POST', payload);
+
+        // Optimistic UI Update avoiding full reload
+        const char = gmState.characters.find(c => c.id === charId);
+        if (char) char[field] = finalVal; // Use finalVal here
+
+        // Let the polling or local update handle the re-render.
     } catch (e) {
-        alert('Erro ao alterar stat: ' + e.message);
+        alert("Erro ao alterar stat: " + e.message);
     }
 }
 
@@ -296,6 +381,32 @@ async function rejectCharacter(charId, sessionId) {
         initGmView();
     } catch (e) { alert(e.message); }
 }
+
+window.viewingCharId = null;
+
+window.openGmCharacterSheet = async function (charId) {
+    window.viewingCharId = charId;
+    try {
+        const char = await apiCall(`character.php?action=get_player_character&id=${charId}`);
+        const container = document.getElementById('gm-dynamic-area');
+
+        container.innerHTML = `
+            <div style="position:absolute; top:1rem; left:1rem; cursor:pointer; color:var(--text-muted); font-size:1.5rem;" onclick="window.viewingCharId=null; initGmView()" title="Voltar para o Painel">
+            <i class="fas fa-arrow-left"></i>
+        </div>
+            <div id="gm-char-sheet-container"></div>
+        `;
+
+        // This is necessary so player.js functions like updateResource() affect this character
+        window.currentPlayingCharacter = char;
+
+        // Render the exact same sheet the player sees
+        window.renderCharacterSheet(char, document.getElementById('gm-char-sheet-container'));
+
+    } catch (e) {
+        alert("Erro ao abrir a ficha do jogador: " + e.message);
+    }
+};
 
 // =====================================
 // EQUIPMENT CATALOG TAB

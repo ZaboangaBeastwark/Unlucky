@@ -36,8 +36,8 @@ if ($method === 'GET') {
         jsonResponse(['campaigns' => $sessions]);
     } elseif ($action === 'get_player_character') {
         $charId = $_GET['id'] ?? null;
-        $stmt = $pdo->prepare('SELECT c.*, s.name as session_name, s.shop_open FROM characters c LEFT JOIN sessions s ON c.session_id = s.id WHERE c.id = ? AND c.user_id = ?');
-        $stmt->execute([$charId, $_SESSION['user_id']]);
+        $stmt = $pdo->prepare('SELECT c.*, s.name as session_name, s.shop_open FROM characters c LEFT JOIN sessions s ON c.session_id = s.id WHERE c.id = ? AND (c.user_id = ? OR s.gm_id = ?)');
+        $stmt->execute([$charId, $_SESSION['user_id'], $_SESSION['user_id']]);
         $char = $stmt->fetch();
         if ($char) {
             $char['attributes'] = json_decode($char['attributes'], true);
@@ -109,12 +109,12 @@ if ($method === 'GET') {
         $value = $input['value'] ?? 0;
 
         // Security check
-        $stmt = $pdo->prepare('SELECT id FROM characters WHERE id = ? AND user_id = ?');
-        $stmt->execute([$charId, $_SESSION['user_id']]);
+        $stmt = $pdo->prepare('SELECT c.id FROM characters c LEFT JOIN sessions s ON c.session_id = s.id WHERE c.id = ? AND (c.user_id = ? OR s.gm_id = ?)');
+        $stmt->execute([$charId, $_SESSION['user_id'], $_SESSION['user_id']]);
         if (!$stmt->fetch())
             jsonResponse(['error' => 'Unauthorized'], 403);
 
-        $allowedFields = ['hp_current', 'stress_current', 'hope_current', 'evasion_current_override', 'armor_slots', 'armor_base_override'];
+        $allowedFields = ['hp_current', 'stress_current', 'hope_current', 'evasion_current_override', 'armor_slots', 'armor_base_override', 'xp'];
         if (in_array($field, $allowedFields)) {
             // Fetch current to increment/decrement safely, alongside base stats to calculate overrides from the correct baseline
             $stmt = $pdo->prepare("SELECT {$field}, evasion_base, armor_base FROM characters WHERE id = ?");
@@ -205,8 +205,8 @@ if ($method === 'GET') {
         }
 
         // Security check
-        $stmt = $pdo->prepare('SELECT id FROM characters WHERE id = ? AND user_id = ?');
-        $stmt->execute([$charId, $_SESSION['user_id']]);
+        $stmt = $pdo->prepare('SELECT c.id FROM characters c LEFT JOIN sessions s ON c.session_id = s.id WHERE c.id = ? AND (c.user_id = ? OR s.gm_id = ?)');
+        $stmt->execute([$charId, $_SESSION['user_id'], $_SESSION['user_id']]);
         if (!$stmt->fetch()) {
             jsonResponse(['error' => 'Unauthorized'], 403);
         }
@@ -231,6 +231,66 @@ if ($method === 'GET') {
 
         jsonResponse(['message' => 'Inventário atualizado com sucesso.']);
 
+    } elseif ($action === 'update_attributes') {
+        $charId = $input['id'] ?? null;
+        $attributes = $input['attributes'] ?? null;
+
+        if (!$charId || !$attributes) {
+            jsonResponse(['error' => 'ID do personagem ou atributos ausentes.'], 400);
+        }
+
+        // Security check
+        $stmt = $pdo->prepare('SELECT c.id FROM characters c LEFT JOIN sessions s ON c.session_id = s.id WHERE c.id = ? AND (c.user_id = ? OR s.gm_id = ?)');
+        $stmt->execute([$charId, $_SESSION['user_id'], $_SESSION['user_id']]);
+        if (!$stmt->fetch()) {
+            jsonResponse(['error' => 'Unauthorized'], 403);
+        }
+
+        $attrJson = json_encode($attributes);
+        $updateStmt = $pdo->prepare('UPDATE characters SET attributes = ? WHERE id = ?');
+        $updateStmt->execute([$attrJson, $charId]);
+
+        jsonResponse(['message' => 'Atributos atualizados com sucesso.']);
+
+    } elseif ($action === 'allow_level_up') {
+        $charId = $input['character_id'] ?? null;
+
+        if (!$charId) {
+            jsonResponse(['error' => 'ID do personagem ausente.'], 400);
+        }
+
+        // Security check - Only the GM of the session can allow level up
+        $stmt = $pdo->prepare('SELECT c.id FROM characters c JOIN sessions s ON c.session_id = s.id WHERE c.id = ? AND s.gm_id = ?');
+        $stmt->execute([$charId, $_SESSION['user_id']]);
+        if (!$stmt->fetch()) {
+            jsonResponse(['error' => 'Unauthorized. Apenas o mestre da sessão pode permitir subir de nível.'], 403);
+        }
+
+        $updateStmt = $pdo->prepare('UPDATE characters SET can_level_up = 1 WHERE id = ?');
+        $updateStmt->execute([$charId]);
+
+        jsonResponse(['message' => 'Permissão para subir de nível concedida.']);
+
+    } elseif ($action === 'set_avatar_y') {
+        $charId = $input['character_id'] ?? null;
+        $val = (int) ($input['value'] ?? 50);
+
+        if (!$charId) {
+            jsonResponse(['error' => 'ID do personagem ausente.'], 400);
+        }
+
+        // Security check
+        $stmt = $pdo->prepare('SELECT c.id FROM characters c LEFT JOIN sessions s ON c.session_id = s.id WHERE c.id = ? AND (c.user_id = ? OR s.gm_id = ?)');
+        $stmt->execute([$charId, $_SESSION['user_id'], $_SESSION['user_id']]);
+        if (!$stmt->fetch()) {
+            jsonResponse(['error' => 'Unauthorized'], 403);
+        }
+
+        $updateStmt = $pdo->prepare('UPDATE characters SET avatar_y = ? WHERE id = ?');
+        $updateStmt->execute([$val, $charId]);
+
+        jsonResponse(['message' => 'Posição do avatar atualizada.']);
+
     } elseif ($action === 'join_session') {
         $charId = $input['character_id'] ?? null;
         $sessionId = $input['session_id'] ?? null;
@@ -240,9 +300,55 @@ if ($method === 'GET') {
         if (!$sStmt->fetch())
             jsonResponse(['error' => 'Sessão não encontrada'], 404);
 
-        $stmt = $pdo->prepare('UPDATE characters SET session_id = ? WHERE id = ? AND user_id = ?');
+        // Insert them as pending initially.
+        $stmt = $pdo->prepare("UPDATE characters SET session_id = ?, session_status = 'pending' WHERE id = ? AND user_id = ?");
         $stmt->execute([$sessionId, $charId, $_SESSION['user_id']]);
         jsonResponse(['message' => 'Requested to join session']);
+    } elseif ($action === 'upload_avatar') {
+        $charId = $_POST['character_id'] ?? null;
+        if (!$charId || !isset($_FILES['avatar_file'])) {
+            jsonResponse(['error' => 'ID do personagem ou arquivo ausente.'], 400);
+        }
+
+        // Security check
+        $stmt = $pdo->prepare('SELECT c.id FROM characters c LEFT JOIN sessions s ON c.session_id = s.id WHERE c.id = ? AND (c.user_id = ? OR s.gm_id = ?)');
+        $stmt->execute([$charId, $_SESSION['user_id'], $_SESSION['user_id']]);
+        if (!$stmt->fetch()) {
+            jsonResponse(['error' => 'Unauthorized'], 403);
+        }
+
+        $file = $_FILES['avatar_file'];
+        if ($file['error'] !== UPLOAD_ERR_OK) {
+            jsonResponse(['error' => 'Erro no upload do arquivo.'], 400);
+        }
+
+        // Validate type
+        $allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!in_array($file['type'], $allowedTypes)) {
+            jsonResponse(['error' => 'Tipo de arquivo não permitido. Use JPG, PNG ou WEBP.'], 400);
+        }
+
+        if ($file['size'] > 10 * 1024 * 1024) { // 10MB limit
+            jsonResponse(['error' => 'Arquivo muito grande. O limite é 10 MB.'], 400);
+        }
+
+        $uploadDir = __DIR__ . '/../uploads/avatars/';
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+        }
+
+        $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
+        $filename = 'avatar_' . $charId . '_' . time() . '.' . $ext;
+        $destPath = $uploadDir . $filename;
+
+        if (move_uploaded_file($file['tmp_name'], $destPath)) {
+            $avatarUrl = 'uploads/avatars/' . $filename;
+            $updateStmt = $pdo->prepare('UPDATE characters SET avatar = ? WHERE id = ?');
+            $updateStmt->execute([$avatarUrl, $charId]);
+            jsonResponse(['message' => 'Avatar enviado com sucesso.', 'avatar_url' => $avatarUrl]);
+        } else {
+            jsonResponse(['error' => 'Falha ao salvar a imagem no servidor.'], 500);
+        }
     } elseif ($action === 'delete') {
         $charId = $input['character_id'] ?? null;
 

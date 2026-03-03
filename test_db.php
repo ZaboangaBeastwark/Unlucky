@@ -1,14 +1,16 @@
 <?php
 require_once 'api/db.php';
-try {
-    $stmt = $pdo->query('SELECT COUNT(*) FROM users');
-    echo "Users table OK. count: " . $stmt->fetchColumn() . "\n";
-} catch (Exception $e) {
-    echo "DB ERROR: " . $e->getMessage() . "\n";
-}
-try {
-    $stmt = $pdo->query('SELECT COUNT(*) FROM characters');
-    echo "Characters table OK. count: " . $stmt->fetchColumn() . "\n";
-} catch (Exception $e) {
-    echo "DB ERROR: " . $e->getMessage() . "\n";
-}
+$stmt = $pdo->query("SELECT id, name, user_id, session_id, session_status FROM characters WHERE name LIKE '%Melvin%'");
+$char = $stmt->fetch(PDO::FETCH_ASSOC);
+echo "Melvin DB Data:\n";
+print_r($char);
+
+$stmt2 = $pdo->query("SELECT id, name FROM sessions WHERE name LIKE '%A Centelha%'");
+$sess = $stmt2->fetch(PDO::FETCH_ASSOC);
+echo "\nA Centelha DB Data:\n";
+print_r($sess);
+
+// Check if Melvin's user_id matches the owner in the screenshot
+$stmt3 = $pdo->query("SELECT id, username FROM users WHERE id = " . ($char['user_id'] ?? 0));
+print_r($stmt3->fetch(PDO::FETCH_ASSOC));
+?>

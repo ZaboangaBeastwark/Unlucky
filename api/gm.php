@@ -24,9 +24,18 @@ if ($method === 'GET') {
         }
 
         // Get characters in this session
-        $stmtChar = $pdo->prepare('SELECT id, name, class, subclass, level, hp_base, hp_current, stress_base, stress_current, evasion_base, evasion_current_override, hope_current, session_status, secret_note FROM characters WHERE session_id = ?');
+        $stmtChar = $pdo->prepare('SELECT c.*, u.username as player_name FROM characters c LEFT JOIN users u ON c.user_id = u.id WHERE c.session_id = ?');
         $stmtChar->execute([$session['id']]);
-        $characters = $stmtChar->fetchAll();
+        $characters = $stmtChar->fetchAll(PDO::FETCH_ASSOC);
+
+        // Decode JSON fields for each character so the frontend receives them properly
+        foreach ($characters as &$char) {
+            $char['attributes'] = json_decode($char['attributes'] ?? '{}', true);
+            $char['inventory'] = json_decode($char['inventory'] ?? '{"equipped":[],"bag":[],"gold":0}', true);
+            $char['experiences'] = json_decode($char['experiences'] ?? '[]', true);
+            $char['cards'] = json_decode($char['cards'] ?? '[]', true);
+            $char['roleplay_answers'] = json_decode($char['roleplay_answers'] ?? '[]', true);
+        }
 
         // Get adversaries
         $stmtAdv = $pdo->prepare('SELECT * FROM adversaries WHERE session_id = ?');

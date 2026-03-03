@@ -34,6 +34,20 @@ try {
         jsonResponse(['equipment' => $items]);
     }
 
+    if ($method === 'GET' && $action === 'list_creation') {
+        // Character creation MUST see all level 1 gear regardless of GM's shop visibility settings.
+        // We'll just fetch everything. player.js filters by tier 1 anyway.
+        $stmt = $pdo->query("SELECT * FROM equipment ORDER BY category, tier, name");
+        $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($items as &$item) {
+            $item['data'] = json_decode($item['data'], true);
+            $item['is_visible'] = (bool) $item['is_visible'];
+        }
+
+        jsonResponse(['equipment' => $items]);
+    }
+
     // ==========================================
     // GM ONLY ACTIONS BELOW
     // ==========================================

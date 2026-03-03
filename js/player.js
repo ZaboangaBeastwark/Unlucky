@@ -28,7 +28,7 @@ async function initPlayerView() {
     const container = document.getElementById('player-dynamic-area');
     container.innerHTML = `<div class="glass-panel" style="padding: 2rem; text-align: center;">Carregando seus heróis...</div>`;
     try {
-        const eqRes = await apiCall('equipment.php?action=list');
+        const eqRes = await apiCall('equipment.php?action=list_creation');
         window.DH_EQUIPMENT = eqRes.equipment || [];
 
         const res = await apiCall('character.php?action=mine');
@@ -132,9 +132,47 @@ window.openCharacterSheet = function (char) {
     window.currentPlayingCharacter = char;
     const container = document.getElementById('player-dynamic-area');
     renderCharacterSheet(char, container);
+
+    // Initialize real-time polling to sync with GM changes
+    if (window.gmSyncInterval) clearInterval(window.gmSyncInterval);
+
+    if (char.session_id) {
+        window.gmSyncInterval = setInterval(async () => {
+            if (!window.currentPlayingCharacter) return clearInterval(window.gmSyncInterval);
+            try {
+                // To avoid deep comparisons, fetch the raw JSON and compare the string representation.
+                const rawRes = await fetch(`${API_BASE}character.php?action=get_player_character&id=${char.id}`, { cache: 'no-store' });
+                const clonedChar = await rawRes.json();
+
+                // Remove dynamic properties that shouldn't trigger a re-render from the comparison
+                // Since php json_encode might change ordering or types, comparing strings of carefully scrubbed objects is best.
+                const c1 = JSON.stringify(window.currentPlayingCharacter);
+                const c2 = JSON.stringify(clonedChar);
+
+                if (c1 !== c2 && !clonedChar.error) {
+                    window.currentPlayingCharacter = clonedChar;
+                    const cContainer = document.getElementById('player-dynamic-area');
+
+                    if (cContainer && cContainer.innerHTML.includes('sheet-col')) {
+                        // Save current scroll position before re-render
+                        const scrollY = window.scrollY;
+                        const scrollX = window.scrollX;
+
+                        renderCharacterSheet(clonedChar, cContainer);
+
+                        // Restore scroll position
+                        window.scrollTo(scrollX, scrollY);
+                    }
+                }
+            } catch (e) {
+                console.error("Erro no polling de sincronização do GM:", e);
+            }
+        }, 2000);
+    }
 };
 
 window.startCharacterCreation = function () {
+    if (window.gmSyncInterval) clearInterval(window.gmSyncInterval);
     // Reset wizard state to defaults to prevent dirty state bleed-over
     wizardState = {
         name: '',
@@ -834,9 +872,13 @@ function renderCharacterSheet(char, container) {
         }
     </style>
     `;
-    const arr = Object.keys(char.attributes);
-    arr.forEach(a => {
-        let val = char.attributes[a];
+    const baseAttrs = ['agility', 'strength', 'finesse', 'instinct', 'presence', 'knowledge'];
+    baseAttrs.forEach(a => {
+        if (char.attributes[a] === undefined) return;
+        let baseVal = char.attributes[a];
+        let modVal = char.attributes[a + '_mod'] || 0;
+        let totalVal = baseVal + modVal;
+
         let short = a.substring(0, 3).toUpperCase();
         let attrInfo = attrDescs[a.charAt(0).toUpperCase() + a.slice(1)] || { name: short, text: '' };
         attrHtml += `
@@ -844,12 +886,13 @@ function renderCharacterSheet(char, container) {
                 <div class="attr-tooltip">
                     <strong style="color:var(--accent-gold); font-size:1.1rem; display:block; margin-bottom:8px; text-transform:uppercase; text-align:center; letter-spacing:1px;">${attrInfo.name}</strong>
                     <div style="font-weight:normal; font-family:'Inter', sans-serif;">${attrInfo.text}</div>
+                    <div style="margin-top:8px; font-size:0.8rem; color:#aaa; text-align:center;">Base: ${baseVal >= 0 ? '+' + baseVal : baseVal} | Modificado: ${totalVal >= 0 ? '+' + totalVal : totalVal}</div>
                 </div>
-                <span>${short}<strong style="color:var(--accent-gold); font-size:1.4rem;">${val >= 0 ? '+' + val : val}</strong></span>
+                <span>${short}<strong style="color:var(--accent-gold); font-size:1.4rem;">${totalVal >= 0 ? '+' + totalVal : totalVal}</strong></span>
                 <div style="font-size:0.75rem; margin-top:5px; color:#3498db; display:flex; align-items:center; justify-content:center; gap:5px;">
-                    <button class="btn btn-sm" onclick="this.nextElementSibling.innerText=parseInt(this.nextElementSibling.innerText)-1" style="padding:0; width:20px; text-align:center;">-</button>
-                    <span style="font-weight:bold; width:20px; text-align:center;">0</span>
-                    <button class="btn btn-sm" onclick="this.previousElementSibling.innerText=parseInt(this.previousElementSibling.innerText)+1" style="padding:0; width:20px; text-align:center;">+</button>
+                    <button class="btn btn-sm" onclick="updateAttributeMod(${char.id}, '${a}', -1)" style="padding:0; width:20px; text-align:center;">-</button>
+                    <span style="font-weight:bold; width:20px; text-align:center;">${modVal}</span>
+                    <button class="btn btn-sm" onclick="updateAttributeMod(${char.id}, '${a}', 1)" style="padding:0; width:20px; text-align:center;">+</button>
                 </div>
             </div>
         `;
@@ -956,19 +999,46 @@ function renderCharacterSheet(char, container) {
                 </div>
             </div>`;
 
+    const levelUpBtnHtml = (char.can_level_up == 1)
+        ? `<div style="background:linear-gradient(90deg, #f1c40f, #e67e22); padding:1rem; text-align:center; border-radius:8px; margin-bottom:1.5rem; cursor:pointer; box-shadow: 0 4px 15px rgba(241,196,15,0.4);" onclick="alert('Sistema de nível ainda em desenvolvimento.')">
+            <h2 style="color:#2c3e50; margin:0; text-transform:uppercase; letter-spacing:2px; font-weight:bold;"><i class="fas fa-arrow-circle-up"></i> Subir de Nível</h2>
+           </div>`
+        : '';
+
     container.innerHTML = `
+        ${levelUpBtnHtml}
         <div class="sheet-grid">
             <div class="sheet-col">
                 <div class="glass-panel sheet-section" style="text-align: center; position:relative;">
                     <div style="position:absolute; top:1rem; left:1rem; cursor:pointer; color:var(--text-muted); font-size:1.5rem;" onclick="initPlayerView()" title="Voltar para Seleção de Heróis">
                         <i class="fas fa-arrow-left"></i>
                     </div>
-                    <h2 style="color: var(--accent-gold); margin-bottom: 0.5rem; margin-top:0.5rem;">${char.name}</h2>
+                    
+                    <div class="avatar-token-wrapper" style="margin-top:1rem; position:relative; display:inline-block;">
+                        ${char.avatar ? `<img src="${char.avatar}" class="avatar-token" id="avatar-img-${char.id}" style="object-position: 50% ${char.avatar_y ?? 50}%;" alt="Avatar">` : `<div class="avatar-token" style="display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:2rem;"><i class="fas fa-user-circle"></i></div>`}
+                        <label for="avatar-upload-${char.id}" class="btn btn-sm btn-outline" style="padding:0.2rem 0.6rem; font-size:0.75rem; cursor:pointer; position:absolute; bottom:-10px; left:50%; transform:translateX(-50%); white-space:nowrap; background:var(--bg-darker); z-index:10;"><i class="fas fa-camera"></i> ${char.avatar ? 'Trocar' : 'Forjar Token'}</label>
+                        <input type="file" id="avatar-upload-${char.id}" style="display:none;" accept="image/png, image/jpeg, image/webp" onchange="uploadAvatar(${char.id})">
+                        
+                        ${char.avatar ? `
+                        <div style="position:absolute; right:-30px; top:0; height:80px; display:flex; align-items:center; justify-content:center;">
+                            <input type="range" orient="vertical" min="0" max="100" value="${char.avatar_y ?? 50}" style="appearance:slider-vertical; height: 70px; width: 20px; cursor:ns-resize; opacity:0.8;" onchange="setAvatarY(this.value, ${char.id})" oninput="document.getElementById('avatar-img-${char.id}').style.objectPosition = '50% ' + this.value + '%'" title="Ajustar Rosto Verticalmente">
+                        </div>` : ''}
+                    </div>
+
+                    <h2 style="color: var(--accent-gold); margin-bottom: 0.5rem; margin-top:1.5rem;">${char.name}</h2>
                     <p style="color: var(--text-muted); font-size: 0.9rem;">
                         Level ${char.level} ${char.class} (${char.subclass}) - ${char.heritage}
                     </p>
                     ${campaignLinkHtml}
                 </div>
+                
+                ${char.avatar ? `
+                <div class="glass-panel sheet-section avatar-full-container">
+                    <h3 style="color:var(--accent-purple); display:none;">Ilustração</h3>
+                    <img src="${char.avatar}" class="avatar-full-img" alt="Ilustração Completa do Herói" title="Ilustração do Herói">
+                </div>
+                ` : ''}
+
                 <div class="glass-panel sheet-section">
                     <h3>Atributos <span style="font-size:0.8rem; font-weight:normal; color:var(--text-muted);">(Mod Temporário)</span></h3>
                     <div class="attr-grid">${attrHtml}</div>
@@ -1047,6 +1117,14 @@ function renderCharacterSheet(char, container) {
                     </div>
 
                     <div class="resource-row">
+                        <span style="font-weight:bold; color:#e78c3c;">XP (Experiência)</span>
+                        <span style="display:flex; align-items:center; gap:0.5rem;">
+                            <button class="btn btn-sm" onclick="updateResource(${char.id}, 'xp', -1)" style="padding:0 0.4rem; font-size:0.8rem">-</button>
+                            <span class="res-val" style="color:#e78c3c;">${char.xp || 0} / 6</span>
+                            <button class="btn btn-sm" onclick="updateResource(${char.id}, 'xp', 1)" style="padding:0 0.4rem; font-size:0.8rem">+</button>
+                        </span>
+                    </div>
+                    <div class="resource-row">
                         <span style="font-weight:bold; color:#3498db;">Esperança (Hope)</span>
                         <span style="display:flex; align-items:center; gap:0.5rem;">
                             <button class="btn btn-sm" onclick="updateResource(${char.id}, 'hope_current', -1)" style="padding:0 0.4rem; font-size:0.8rem">-</button>
@@ -1101,7 +1179,7 @@ function renderCharacterSheet(char, container) {
                         <div style="font-size:0.9rem; color:var(--text-muted); font-style:italic;">${char.roleplay_answers[1] || 'Sem dados'}</div>
                     </div>
                     ${char.secret_note ? `
-                    <div style="background:rgba(0,0,0,0.4); padding:1rem; border:1px dashed #9b59b6; margin-bottom:1rem; border-radius:4px;">
+                    <div class="secret-note-container" style="background:rgba(0,0,0,0.4); padding:1rem; border:1px dashed #9b59b6; margin-bottom:1rem; border-radius:4px;">
                         <div style="font-weight:bold; font-size:1rem; color:#9b59b6; margin-bottom:0.5rem;"><i class="fas fa-user-secret"></i> Apenas o Mestre Sabe...</div>
                         <div style="font-size:0.9rem; color:#dcdcdc;">${char.secret_note}</div>
                     </div>
@@ -1113,6 +1191,10 @@ function renderCharacterSheet(char, container) {
                     ${char.cards.length ? cardsHtml : '<p style="color:var(--text-muted);">Nenhuma carta ativa.</p>'}
                 </div>
             </div>
+        </div>
+        
+        <div style="text-align:center; margin-top: 3rem; margin-bottom: 2rem;">
+            <button class="btn btn-outline pdf-hidden" onclick="exportToPDF('${char.name}')" style="border-color:var(--accent-gold); color:var(--accent-gold); padding:0.6rem 2rem; font-size:1.1rem; display:inline-flex; align-items:center; gap:0.5rem;"><i class="fas fa-file-pdf"></i> Baixar Ficha em PDF</button>
         </div>
     `;
 
@@ -1223,7 +1305,7 @@ window.equipItem = async function (charId, bagIndex) {
         charToUpdate.inventory.equipped.push(item);
 
         await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: charToUpdate.inventory });
-        renderCharacterSheet(charToUpdate, document.getElementById('player-dynamic-area'));
+        renderCharacterSheet(charToUpdate, document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area'));
     } catch (e) {
         console.error(e);
         alert("Erro ao equipar: " + e.message);
@@ -1249,7 +1331,7 @@ window.unequipItem = async function (charId, equipIndex) {
         charToUpdate.inventory.bag.push(item);
 
         await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: charToUpdate.inventory });
-        renderCharacterSheet(charToUpdate, document.getElementById('player-dynamic-area'));
+        renderCharacterSheet(charToUpdate, document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area'));
     } catch (e) {
         console.error(e);
         alert("Erro ao guardar: " + e.message);
@@ -1269,7 +1351,7 @@ window.dropItem = async function (charId, bagIndex) {
         charToUpdate.inventory.bag.splice(bagIndex, 1);
 
         await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: charToUpdate.inventory });
-        renderCharacterSheet(charToUpdate, document.getElementById('player-dynamic-area'));
+        renderCharacterSheet(charToUpdate, document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area'));
     } catch (e) {
         console.error(e);
         alert("Erro ao excluir: " + e.message);
@@ -1289,7 +1371,7 @@ window.addItem = async function (charId) {
         }
 
         await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: currentPlayingCharacter.inventory });
-        renderCharacterSheet(currentPlayingCharacter, document.getElementById('player-dynamic-area'));
+        renderCharacterSheet(currentPlayingCharacter, document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area'));
         el.value = '';
     }
 };
@@ -1315,7 +1397,12 @@ window.updateResource = async function (charId, field, valueDelta, maxLimit) {
             // Re-fetch the fresh character from the backend to ensure accurate state
             const charRefreshed = await apiCall(`character.php?action=get_player_character&id=${charId}`);
             if (charRefreshed && !charRefreshed.error) {
-                openCharacterSheet(charRefreshed);
+                if (document.getElementById('gm-char-sheet-container')) {
+                    window.currentPlayingCharacter = charRefreshed;
+                    renderCharacterSheet(charRefreshed, document.getElementById('gm-char-sheet-container'));
+                } else {
+                    openCharacterSheet(charRefreshed);
+                }
             }
         } else if (res.error) {
             alert(res.error);
@@ -1323,6 +1410,48 @@ window.updateResource = async function (charId, field, valueDelta, maxLimit) {
     } catch (e) {
         alert('Erro ao atualizar recurso: ' + e.message);
     }
+};
+
+// -------------------------------------------------------------
+// PDF Export Logic
+// -------------------------------------------------------------
+window.exportToPDF = function (charName) {
+    // Hide iteractive elements and secret notes temporarily
+    const hideElements = document.querySelectorAll('.pdf-hidden, .btn-sm, #campaign-join-block, input[type="file"], input[type="range"], .secret-note-container, .fa-pencil-alt');
+    const originalDisplays = [];
+    hideElements.forEach(el => {
+        originalDisplays.push(el.style.display);
+        el.style.display = 'none';
+    });
+
+    const element = document.getElementById('player-dynamic-area') || document.getElementById('gm-char-sheet-container');
+    if (!element) return alert("Erro ao localizar área PDF");
+
+    // Add CSS class to enforce solid colors and prevent page breaks
+    element.classList.add('pdf-export-mode');
+
+    const opt = {
+        margin: [0.5, 0.5, 0.5, 0.5],
+        filename: `${charName}_Daggerheart.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#0f0f13', scrollY: 0 },
+        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
+
+    html2pdf().set(opt).from(element).save().then(() => {
+        // Restore elements and remove CSS class after PDF generation
+        element.classList.remove('pdf-export-mode');
+        hideElements.forEach((el, index) => {
+            el.style.display = originalDisplays[index];
+        });
+    }).catch(err => {
+        console.error(err);
+        alert("Ocorreu um erro na geração do PDF.");
+        element.classList.remove('pdf-export-mode');
+        hideElements.forEach((el, index) => {
+            el.style.display = originalDisplays[index];
+        });
+    });
 };
 
 window.joinCampaign = async function (charId) {
@@ -1371,6 +1500,53 @@ window.parseGoldCost = (costStr) => {
     if (s.includes('baú') || s.includes('bau')) return num * 100;
     if (s.includes('bolsa') || s.includes('saco')) return num * 10;
     return num; // Default case is punhados (handfuls)
+};
+
+window.uploadAvatar = async function (charId) {
+    const input = document.getElementById(`avatar-upload-${charId}`);
+    if (!input || !input.files || input.files.length === 0) return;
+
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append('character_id', charId);
+    formData.append('avatar_file', file);
+
+    try {
+        const res = await fetch('api/character.php?action=upload_avatar', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        if (data.error) {
+            alert(data.error);
+        } else {
+            alert(data.message);
+            // Re-fetch to update view seamlessly
+            const charRefreshed = await apiCall(`character.php?action=get_player_character&id=${charId}`);
+            if (charRefreshed && !charRefreshed.error) {
+                if (document.getElementById('gm-char-sheet-container')) {
+                    window.currentPlayingCharacter = charRefreshed;
+                    renderCharacterSheet(charRefreshed, document.getElementById('gm-char-sheet-container'));
+                } else {
+                    openCharacterSheet(charRefreshed);
+                }
+            }
+        }
+    } catch (e) {
+        alert('Erro ao enviar imagem: ' + e.message);
+    }
+    input.value = ''; // Reset input
+};
+
+window.setAvatarY = async function (val, charId) {
+    try {
+        await apiCall('character.php?action=set_avatar_y', 'POST', { character_id: charId, value: val });
+        if (window.currentPlayingCharacter && window.currentPlayingCharacter.id == charId) {
+            window.currentPlayingCharacter.avatar_y = val;
+        }
+    } catch (e) {
+        console.error("Erro ao salvar pos:", e);
+    }
 };
 
 window.openPlayerShop = async function () {
@@ -1492,7 +1668,7 @@ window.buyItem = async function (itemId, costVal) {
         // Refresh UI
         document.getElementById('player-shop-gold-display').innerText = formatGold(window.currentPlayingCharacter.inventory.gold || 0);
         renderPlayerShopItems(); // Re-render to update 'Comprar' buttons state
-        renderCharacterSheet(window.currentPlayingCharacter, document.getElementById('player-dynamic-area'));
+        renderCharacterSheet(window.currentPlayingCharacter, document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area'));
 
         alert(`Você comprou ${item.name} com sucesso! O item foi enviado para a sua Mochila.`);
 
@@ -1501,6 +1677,29 @@ window.buyItem = async function (itemId, costVal) {
         window.currentPlayingCharacter.inventory.gold += costVal;
         window.currentPlayingCharacter.inventory.bag.pop();
         alert("Erro ao comprar item: " + e.message);
+    }
+};
+
+window.updateAttributeMod = async function (charId, attrKey, delta) {
+    if (!window.currentPlayingCharacter || window.currentPlayingCharacter.id !== charId) return;
+
+    const modKey = attrKey + '_mod';
+    let currentMod = window.currentPlayingCharacter.attributes[modKey] || 0;
+    window.currentPlayingCharacter.attributes[modKey] = currentMod + delta;
+
+    // Optimistic UI update
+    renderCharacterSheet(window.currentPlayingCharacter, document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area'));
+
+    try {
+        await apiCall('character.php?action=update_attributes', 'POST', {
+            id: charId,
+            attributes: window.currentPlayingCharacter.attributes
+        });
+    } catch (e) {
+        // Rollback on failure
+        window.currentPlayingCharacter.attributes[modKey] -= delta;
+        renderCharacterSheet(window.currentPlayingCharacter, document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area'));
+        alert("Erro ao salvar modificar de atributo: " + e.message);
     }
 };
 
