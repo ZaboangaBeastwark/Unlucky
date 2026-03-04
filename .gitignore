@@ -2,3 +2,6 @@
 __pycache__/
 *.txt
 api/config.php
+upload_ftp.*
+check_ftp.php
+test_db_conn.php
