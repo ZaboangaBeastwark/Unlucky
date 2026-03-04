@@ -5,3 +5,7 @@ api/config.php
 upload_ftp.*
 check_ftp.php
 test_db_conn.php
+.env
+.env.*
+js/encounter_scratch.js
+patch_*.php

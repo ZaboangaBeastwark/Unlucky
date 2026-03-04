@@ -22,6 +22,8 @@ async function initGmView() {
             gmState.session = res.session;
             gmState.characters = res.characters;
             gmState.adversaries = res.adversaries;
+            gmState.bestiary = res.bestiary || [];
+            gmState.encounter_groups = res.encounter_groups || [];
             renderGmDashboard(container);
             startGmPolling(); // Initialize auto-sync
         } else {
@@ -58,6 +60,20 @@ function startGmPolling() {
 
                 if (a1 !== a2) {
                     gmState.adversaries = data.adversaries;
+                    needsRender = true;
+                }
+
+                const b1 = JSON.stringify(gmState.bestiary);
+                const b2 = JSON.stringify(data.bestiary || []);
+                if (b1 !== b2) {
+                    gmState.bestiary = data.bestiary || [];
+                    needsRender = true;
+                }
+
+                const e1 = JSON.stringify(gmState.encounter_groups);
+                const e2 = JSON.stringify(data.encounter_groups || []);
+                if (e1 !== e2) {
+                    gmState.encounter_groups = data.encounter_groups || [];
                     needsRender = true;
                 }
 
@@ -120,9 +136,10 @@ window.switchGmTab = function (tabName) {
 
 function renderGmDashboard(container) {
     let tabsHtml = `
-        <div style="margin-bottom: 1.5rem; display:flex; gap:1rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
-            <button onclick="switchGmTab('session')" style="background:none; border:none; color:${gmState.activeTab === 'session' ? 'var(--accent-gold)' : 'white'}; padding:0.5rem 1rem; cursor:pointer; border-bottom: ${gmState.activeTab === 'session' ? '2px solid var(--accent-gold)' : 'none'}; font-weight: ${gmState.activeTab === 'session' ? 'bold' : 'normal'}; font-size:1.1rem;">Sessão Ativa</button>
-            <button onclick="switchGmTab('catalog')" style="background:none; border:none; color:${gmState.activeTab === 'catalog' ? 'var(--accent-gold)' : 'white'}; padding:0.5rem 1rem; cursor:pointer; border-bottom: ${gmState.activeTab === 'catalog' ? '2px solid var(--accent-gold)' : 'none'}; font-weight: ${gmState.activeTab === 'catalog' ? 'bold' : 'normal'}; font-size:1.1rem;">Catálogo de Equipamentos</button>
+        <div style="margin-bottom: 1.5rem; display:flex; gap:1rem; border-bottom: 1px solid rgba(255,255,255,0.1); overflow-x:auto;">
+            <button onclick="switchGmTab('session')" style="background:none; border:none; color:${gmState.activeTab === 'session' ? 'var(--accent-gold)' : 'white'}; padding:0.5rem 1rem; cursor:pointer; border-bottom: ${gmState.activeTab === 'session' ? '2px solid var(--accent-gold)' : 'none'}; font-weight: ${gmState.activeTab === 'session' ? 'bold' : 'normal'}; font-size:1.1rem; white-space:nowrap;">Sessão Ativa</button>
+            <button onclick="switchGmTab('bestiary')" style="background:none; border:none; color:${gmState.activeTab === 'bestiary' ? 'var(--accent-gold)' : 'white'}; padding:0.5rem 1rem; cursor:pointer; border-bottom: ${gmState.activeTab === 'bestiary' ? '2px solid var(--accent-gold)' : 'none'}; font-weight: ${gmState.activeTab === 'bestiary' ? 'bold' : 'normal'}; font-size:1.1rem; white-space:nowrap;">Bestiário / NPCs</button>
+            <button onclick="switchGmTab('catalog')" style="background:none; border:none; color:${gmState.activeTab === 'catalog' ? 'var(--accent-gold)' : 'white'}; padding:0.5rem 1rem; cursor:pointer; border-bottom: ${gmState.activeTab === 'catalog' ? '2px solid var(--accent-gold)' : 'none'}; font-weight: ${gmState.activeTab === 'catalog' ? 'bold' : 'normal'}; font-size:1.1rem; white-space:nowrap;">Catálogo de Itens</button>
         </div>
         <div id="gm-tab-content"></div>
     `;
@@ -131,6 +148,8 @@ function renderGmDashboard(container) {
     const contentArea = document.getElementById('gm-tab-content');
     if (gmState.activeTab === 'session') {
         renderGmSessionTab(contentArea);
+    } else if (gmState.activeTab === 'bestiary') {
+        renderGmBestiaryTab(contentArea);
     } else {
         renderGmCatalogTab(contentArea);
     }
@@ -139,26 +158,46 @@ function renderGmDashboard(container) {
 function renderGmSessionTab(container) {
     const s = gmState.session;
 
-    const activeChars = gmState.characters.filter(c => c.session_status === 'approved');
+    const activeChars = gmState.characters.filter(c => ['approved', 'suspended', 'deceased'].includes(c.session_status));
     const pendingChars = gmState.characters.filter(c => c.session_status === 'pending');
 
     let charsHtml = activeChars.length === 0 ?
         '<p style="color:var(--text-muted);">Nenhum jogador na sessão ainda.</p>' : '';
 
     activeChars.forEach(c => {
+        let statusIcon = '';
+        let cardStyle = 'background:rgba(0,0,0,0.3); padding:1.2rem; border-radius:8px; border:1px solid var(--accent-gold); margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; transition: transform 0.2s;';
+
+        if (c.session_status === 'deceased') {
+            statusIcon = '<i class="fas fa-skull" style="color:#e74c3c; margin-right:5px;" title="Falecido"></i>';
+            cardStyle = 'background:rgba(231, 76, 60, 0.1); padding:1.2rem; border-radius:8px; border:1px solid rgba(231, 76, 60, 0.5); margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; opacity:0.7; filter: grayscale(50%);';
+        } else if (c.session_status === 'suspended') {
+            statusIcon = '<i class="fas fa-user-clock" style="color:#f39c12; margin-right:5px;" title="Suspenso"></i>';
+            cardStyle = 'background:rgba(243, 156, 18, 0.1); padding:1.2rem; border-radius:8px; border:1px solid rgba(243, 156, 18, 0.5); margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; opacity:0.8;';
+        }
+
         charsHtml += `
-            <div style="background:rgba(0,0,0,0.3); padding:1.2rem; border-radius:8px; border:1px solid var(--accent-gold); margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; transition: transform 0.2s;" onmouseover="this.style.boxShadow='0 0 10px rgba(241,196,15,0.2)';" onmouseout="this.style.boxShadow='none';">
+            <div style="${cardStyle}" onmouseover="this.style.boxShadow='0 0 10px rgba(241,196,15,0.2)';" onmouseout="this.style.boxShadow='none';">
                 <div style="flex-grow:1; min-width:200px;">
                     <h4 style="color:var(--accent-gold); margin-bottom:0.3rem; font-size:1.3rem; display:flex; align-items:center; gap:0.5rem; cursor:pointer;" onclick="openGmCharacterSheet(${c.id})" title="Clique para Abrir a Ficha do Jogador">
-                        <i class="fas fa-file-alt" style="font-size:1rem; opacity:0.7;"></i> ${c.name} 
+                        ${statusIcon} <i class="fas fa-file-alt" style="font-size:1rem; opacity:0.7;"></i> ${c.name} 
                     </h4>
                     <div style="font-size:0.9rem; margin-bottom:0.3rem; color:var(--text-light);">
                         Jogador: <strong style="color:#3498db;">${c.player_name || 'Desconhecido'}</strong>
                     </div>
-                    <div style="font-size:0.85rem; color:var(--text-muted);">
-                        Nível ${c.level} ${c.class} (${c.subclass || 'Sem Subclasse'}) 
-                        <span style="margin-left:1rem; padding:0.2rem 0.6rem; border-radius:4px; background:rgba(231,140,60,0.1); color:#e78c3c; border:1px solid rgba(231,140,60,0.3);">XP Atual: <b>${c.xp || 0}</b></span>
-                        ${(parseInt(c.xp || 0) >= 6 && c.can_level_up == 0) ? `<button class="btn btn-sm" onclick="allowLevelUp(${c.id})" style="margin-left:1rem; background:linear-gradient(135deg, #2ecc71, #27ae60); border:none; color:white; padding:0.2rem 0.6rem;">Permitir Subir de Nível <i class="fas fa-arrow-up"></i></button>` : ''}
+                    <div style="font-size:0.85rem; color:var(--text-muted); display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
+                        <span>Nível ${c.level} ${c.class} (${c.subclass || 'Sem Subclasse'})</span>
+                        <span style="padding:0.2rem 0.6rem; border-radius:4px; background:rgba(231,140,60,0.1); color:#e78c3c; border:1px solid rgba(231,140,60,0.3);">XP Atual: <b>${c.xp || 0}</b></span>
+                        ${(parseInt(c.xp || 0) >= 6 && c.can_level_up == 0) ? `<button class="btn btn-sm" onclick="allowLevelUp(${c.id})" style="background:linear-gradient(135deg, #2ecc71, #27ae60); border:none; color:white; padding:0.2rem 0.6rem;">Permitir Subir de Nível <i class="fas fa-arrow-up"></i></button>` : ''}
+                        
+                        <div style="display:inline-flex; align-items:center; margin-left: auto;">
+                            <label style="margin-right:0.5rem; font-size:0.8rem; color:var(--text-light);">Status:</label>
+                            <select onchange="changeCharacterStatus(${c.id}, this.value, ${s.id})" style="background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border); border-radius:4px; padding:0.2rem 0.5rem; font-size:0.8rem;">
+                                <option value="approved" ${c.session_status === 'approved' ? 'selected' : ''}>Ativo</option>
+                                <option value="suspended" ${c.session_status === 'suspended' ? 'selected' : ''}>Suspenso</option>
+                                <option value="deceased" ${c.session_status === 'deceased' ? 'selected' : ''}>Falecido</option>
+                            </select>
+                        </div>
                     </div>
                     ${c.secret_note ? `<div style="margin-top:0.8rem;"><button class="btn btn-sm" onclick="alert('Segredo de ${c.name}:\\n\\n' + \`${c.secret_note.replace(/`/g, '\\`')}\`)" style="background:transparent; border:1px dashed #9b59b6; color:#9b59b6; font-size:0.75rem; padding:0.2rem 0.5rem;"><i class="fas fa-user-secret"></i> Ver Nota Secreta</button></div>` : ''}
                 </div>
@@ -196,26 +235,90 @@ function renderGmSessionTab(container) {
         });
     }
 
-    let advHtml = '';
+    let encountersHtml = '';
+    const encounters = gmState.encounter_groups || [];
+
+    const advByEncounter = { 'none': [] };
+    encounters.forEach(e => advByEncounter[e.id] = []);
+
     gmState.adversaries.forEach(a => {
-        advHtml += `
-            <div style="background:rgba(231, 76, 60, 0.1); padding:1rem; border-radius:8px; border:1px solid rgba(231, 76, 60, 0.3); margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center;">
+        if (a.encounter_id && advByEncounter[a.encounter_id]) {
+            advByEncounter[a.encounter_id].push(a);
+        } else {
+            advByEncounter['none'].push(a);
+        }
+    });
+
+    function renderAdvCard(a) {
+        return `
+            <div style="background:rgba(231, 76, 60, 0.1); padding:0.8rem; border-radius:8px; border:1px solid rgba(231, 76, 60, 0.3); margin-bottom:0.5rem; display:flex; justify-content:space-between; align-items:center;">
                 <div>
-                    <h4 style="color:#e74c3c; margin-bottom:0.2rem;">${a.name}</h4>
-                    <span style="font-size:0.8rem; color:var(--text-muted); text-transform:uppercase;">${a.type} | Tier ${a.tier}</span>
-                </div>
-                <div style="display:flex; gap:1rem; align-items:center;">
-                    <div class="res-tracker">
-                        <span style="font-size:0.8rem;">PV</span>
-                        <button onclick="updateAdversary(${a.id}, 'hp', ${a.hp - 1})">-</button>
-                        <span>${a.hp}</span>
-                        <button onclick="updateAdversary(${a.id}, 'hp', ${a.hp + 1})">+</button>
+                    <h4 style="color:#e74c3c; margin-bottom:0.2rem; font-size:1rem;">${a.name}</h4>
+                    <div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;">
+                        ${a.type} | Tier ${a.tier}
+                        ${a.template_id ? `<button onclick="openBestiaryModalFromTemplate(${a.template_id})" style="background:none; border:none; color:var(--accent-gold); cursor:pointer; margin-left:5px;" title="Ver Ficha Completa"><i class="fas fa-search"></i></button>` : ''}
                     </div>
-                    <button class="btn btn-outline" style="border-color:#e74c3c; color:#e74c3c; padding:0.4rem 0.8rem;" onclick="deleteAdversary(${a.id})">X</button>
+                </div>
+                <div style="display:flex; gap:0.5rem; align-items:center;">
+                    <div class="res-tracker" style="gap:2px;">
+                        <span style="font-size:0.7rem;">PV</span>
+                        <button onclick="updateAdversary(${a.id}, 'hp', ${a.hp - 1})" style="padding:2px 6px;">-</button>
+                        <span style="font-weight:bold;">${a.hp}</span>
+                        <button onclick="updateAdversary(${a.id}, 'hp', ${a.hp + 1})" style="padding:2px 6px;">+</button>
+                    </div>
+                    <button class="btn btn-outline" style="border-color:#e74c3c; color:#e74c3c; padding:0.2rem 0.6rem;" onclick="deleteAdversary(${a.id})" title="Remover da Cena"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+        `;
+    }
+
+    encountersHtml += `
+        <div style="display:flex; gap:10px; margin-bottom:1.5rem; justify-content:space-between; align-items:center;">
+            <input type="text" id="new-encounter-name" placeholder="Nome do Novo Grupo (ex: Emboscada na Floresta)" style="flex:1; padding:0.6rem; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.5); color:white;">
+            <button class="btn btn-primary" onclick="createEncounter(${s.id})" style="background:linear-gradient(135deg, #e74c3c, #c0392b);">Criar Grupo</button>
+        </div>
+    `;
+
+    encounters.forEach(enc => {
+        let groupAdvs = advByEncounter[enc.id] || [];
+        let groupAdvsHtml = groupAdvs.length > 0 ? groupAdvs.map(renderAdvCard).join('') : '<p style="font-size:0.85rem; color:var(--text-muted); opacity:0.8;">O grupo está vazio.</p>';
+
+        encountersHtml += `
+            <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:1rem; margin-bottom:1rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:0.5rem; margin-bottom:0.8rem;">
+                    <h4 style="color:white; font-size:1.1rem; margin:0;"><i class="fas fa-users" style="color:#e74c3c; margin-right:5px;"></i> ${enc.name}</h4>
+                    <div>
+                        <button class="btn btn-outline" style="padding:0.3rem 0.6rem; font-size:0.75rem; border-color:var(--accent-gold); color:var(--accent-gold);" onclick="openAddAdvPicker(${enc.id})"><i class="fas fa-plus"></i> Oponente</button>
+                        <button class="btn btn-outline" style="padding:0.3rem 0.6rem; font-size:0.75rem; border-color:#e74c3c; color:#e74c3c; margin-left:5px;" onclick="deleteEncounter(${enc.id}, '${enc.name.replace(/'/g, "\\'")}')" title="Excluir Grupo"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>
+                <div>
+                    ${groupAdvsHtml}
                 </div>
             </div>
         `;
     });
+
+    let ungrouped = advByEncounter['none'] || [];
+    if (ungrouped.length > 0) {
+        encountersHtml += `
+            <div style="background:rgba(0,0,0,0.2); border:1px dashed rgba(231, 76, 60, 0.3); border-radius:8px; padding:1rem; margin-bottom:1rem;">
+                <div style="border-bottom:1px solid rgba(231,76,60,0.2); padding-bottom:0.5rem; margin-bottom:0.8rem;">
+                    <h4 style="color:var(--text-muted); font-size:1rem; margin:0;">Inimigos Sem Grupo / Soltos</h4>
+                    <button class="btn btn-outline" style="padding:0.2rem 0.4rem; font-size:0.7rem; border-color:var(--text-muted); color:var(--text-muted); display:inline-block; margin-top:5px;" onclick="openAddAdvPicker(null)"><i class="fas fa-plus"></i> Oponente Avulso</button>
+                </div>
+                <div>
+                    ${ungrouped.map(renderAdvCard).join('')}
+                </div>
+            </div>
+        `;
+    } else {
+        encountersHtml += `
+            <div style="text-align:right;">
+                <button class="btn btn-outline" style="padding:0.2rem 0.5rem; font-size:0.75rem; border-color:var(--text-muted); color:var(--text-muted);" onclick="openAddAdvPicker(null)"><i class="fas fa-plus"></i> Oponente Avulso (Sem Grupo)</button>
+            </div>
+        `;
+    }
 
     container.innerHTML = `
         <div class="sheet-header glass-panel" style="border-left: 4px solid var(--accent-purple); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
@@ -249,25 +352,10 @@ function renderGmSessionTab(container) {
             
             <div class="sheet-col">
                 <div class="glass-panel sheet-section" style="border-top:2px solid #e74c3c;">
-                    <h3 style="color:#e74c3c; display:flex; justify-content:space-between; align-items:center;">
-                        Rastreador de Adversários
-                        <button class="btn btn-primary" style="font-size:0.8rem; padding:0.4rem 0.8rem; background:linear-gradient(135deg, #e74c3c, #c0392b);" onclick="showAddAdversaryForm()">+ Adicionar</button>
+                    <h3 style="color:#e74c3c; display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+                        <i class="fas fa-khanda"></i> Rastreador de Combate (Sessão)
                     </h3>
-                    <div id="add-adv-form" style="display:none; background:rgba(0,0,0,0.3); padding:1rem; border-radius:8px; margin-bottom:1rem; border:1px solid var(--glass-border);">
-                        <input type="text" id="adv-name" placeholder="Nome" class="w-100" style="margin-bottom:0.5rem; padding:0.5rem; background:rgba(255,255,255,0.1); border:none; color:white; border-radius:4px;">
-                        <select id="adv-type" class="w-100" style="margin-bottom:0.5rem; padding:0.5rem; background:rgba(255,255,255,0.1); border:none; color:white; border-radius:4px;">
-                            <option value="minion">Lacaio (Minion)</option>
-                            <option value="average">Comum (Average)</option>
-                            <option value="elite">Elite</option>
-                            <option value="solo">Solo</option>
-                            <option value="horde">Horda</option>
-                        </select>
-                        <div style="display:flex; gap:0.5rem;">
-                            <input type="number" id="adv-hp" placeholder="PV" style="width:50%; padding:0.5rem; background:rgba(255,255,255,0.1); border:none; color:white; border-radius:4px;">
-                            <button class="btn btn-primary w-100" onclick="submitAdversary(${s.id})">Salvar</button>
-                        </div>
-                    </div>
-                    ${advHtml}
+                    ${encountersHtml}
                 </div>
             </div>
         </div>
@@ -381,6 +469,35 @@ async function rejectCharacter(charId, sessionId) {
         initGmView();
     } catch (e) { alert(e.message); }
 }
+
+window.changeCharacterStatus = async function (charId, newStatus, sessionId) {
+    let confirmMsg = '';
+    if (newStatus === 'deceased') confirmMsg = 'Tem certeza de que este personagem faleceu? Ele ainda ficará visível no painel para consulta, mas será marcado como morto.';
+    else if (newStatus === 'suspended') confirmMsg = 'Tem certeza de que deseja suspender este personagem? Ele será tratado como ausente da campanha atual.';
+
+    if (confirmMsg && !confirm(confirmMsg)) {
+        // Revert select visually if cancelled
+        initGmView();
+        return;
+    }
+
+    try {
+        await apiCall('gm.php?action=update_character_status', 'POST', {
+            character_id: charId,
+            status: newStatus,
+            session_id: sessionId
+        });
+
+        // Optimistic update
+        const char = gmState.characters.find(c => c.id === charId);
+        if (char) char.session_status = newStatus;
+
+        initGmView();
+    } catch (e) {
+        alert("Erro ao alterar status: " + e.message);
+        initGmView();
+    }
+};
 
 window.viewingCharId = null;
 
@@ -679,3 +796,385 @@ async function deleteGmItem() {
         alert("Erro ao excluir: " + e.message);
     }
 }
+
+// Bestiary / NPCs Tab
+function renderGmBestiaryTab(container) {
+    if (!gmState.bestiary) gmState.bestiary = [];
+
+    let html = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+            <h3 style="color:var(--accent-gold);">Bestiário & NPCs</h3>
+            <button class="btn btn-primary" onclick="openBestiaryModal()" style="display:flex; align-items:center; gap:0.5rem;"><i class="fas fa-plus"></i> Forjar Oponente</button>
+        </div>
+        
+        <div style="margin-bottom:1.5rem;">
+            <input type="text" id="bestiary-search" placeholder="Buscar fichas por nome ou tipo..." style="width:100%; padding:0.8rem; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.5); color:white;" oninput="filterBestiary()">
+        </div>
+        
+        <div id="bestiary-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:1rem;">
+    `;
+
+    html += generateBestiaryCardsHTML(gmState.bestiary);
+
+    html += `</div>`;
+    container.innerHTML = html;
+}
+
+function generateBestiaryCardsHTML(list) {
+    if (list.length === 0) {
+        return `<p style="color:var(--text-muted); grid-column:1/-1;">Nenhuma ficha encontrada.</p>`;
+    }
+
+    let html = '';
+    list.forEach(b => {
+        const isCanonical = !b.gm_id;
+        const borderColor = isCanonical ? 'rgba(255,255,255,0.2)' : 'var(--accent-purple)';
+        const tagColor = isCanonical ? '#7f8c8d' : '#9b59b6';
+
+        html += `
+            <div class="glass-panel" style="padding:1.5rem; text-align:left; border:1px solid ${borderColor}; position:relative;">
+                ${isCanonical ? `<span style="position:absolute; top:10px; right:10px; font-size:0.7rem; background:${tagColor}; color:white; padding:2px 6px; border-radius:4px; opacity:0.7;">Livro Base</span>` : ''}
+                
+                <h4 style="color:var(--accent-gold); margin-bottom:0.2rem; font-size:1.2rem;">${b.name}</h4>
+                <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem; display:flex; gap:10px;">
+                    <span style="border-right:1px solid rgba(255,255,255,0.2); padding-right:10px;">Tier ${b.tier}</span>
+                    <span style="border-right:1px solid rgba(255,255,255,0.2); padding-right:10px; font-weight:bold;">${b.type}</span>
+                    <span>DF: ${b.difficulty}</span>
+                </div>
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.3); padding:0.5rem; border-radius:4px; margin-bottom:1rem;">
+                    <div style="text-align:center;">
+                        <span style="font-size:0.7rem; color:var(--text-muted); display:block;">PV</span>
+                        <b>${b.hp_max}</b>
+                    </div>
+                    <div style="text-align:center;">
+                        <span style="font-size:0.7rem; color:var(--text-muted); display:block;">Fadiga</span>
+                        <b>${b.stress_max}</b>
+                    </div>
+                    <div style="text-align:center;">
+                        <span style="font-size:0.7rem; color:var(--text-muted); display:block;">Dano (M / G)</span>
+                        <b style="color:#e67e22;">${b.threshold_major || '-'}</b> / <b style="color:#e74c3c;">${b.threshold_severe || '-'}</b>
+                    </div>
+                </div>
+                
+                <p style="font-size:0.85rem; color:var(--text-light); margin-bottom:1.5rem; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-overflow:ellipsis;">
+                    ${b.description || b.motivations || 'Sem descrição.'}
+                </p>
+                
+                <div style="display:flex; gap:0.5rem;">
+                    <button class="btn btn-outline" style="flex:1; padding:0.5rem; border-color:var(--accent-purple); color:white;" onclick='openBestiaryModal(${JSON.stringify(b).replace(/'/g, "&#39;")})'><i class="fas fa-search"></i> Detalhes</button>
+                    ${gmState.session ? `<button class="btn btn-primary" style="flex:1; padding:0.5rem; background:linear-gradient(135deg, #e74c3c, #c0392b);" onclick="openAddAdvPicker(${b.id}, true)"><i class="fas fa-plus"></i> Cena</button>` : ''}
+                </div>
+            </div>
+        `;
+    });
+    return html;
+}
+
+function filterBestiary() {
+    const term = document.getElementById('bestiary-search').value.toLowerCase();
+    const grid = document.getElementById('bestiary-grid');
+    if (!grid) return;
+
+    if (!term) {
+        grid.innerHTML = generateBestiaryCardsHTML(gmState.bestiary);
+        return;
+    }
+
+    const filtered = gmState.bestiary.filter(b =>
+        b.name.toLowerCase().includes(term) ||
+        b.type.toLowerCase().includes(term)
+    );
+
+    grid.innerHTML = generateBestiaryCardsHTML(filtered);
+}
+
+function toggleHordeMultiplier() {
+    const type = document.getElementById('gm-bestiary-type').value;
+    const cont = document.getElementById('gm-horde-mult-container');
+    if (type === 'Horda') {
+        cont.style.display = 'block';
+    } else {
+        cont.style.display = 'none';
+        document.getElementById('gm-bestiary-horde-mult').value = '';
+    }
+}
+
+function openBestiaryModal(b = null) {
+    const modal = document.getElementById('gm-bestiary-modal');
+    const delBtn = document.getElementById('gm-bestiary-delete-btn');
+    const form = document.getElementById('gm-bestiary-form');
+
+    const saveBtn = document.getElementById('gm-bestiary-save-btn');
+    form.reset();
+    document.getElementById('gm-bestiary-horde-mult').value = '';
+
+    if (b) {
+        document.getElementById('gm-bestiary-modal-title').innerText = b.gm_id ? 'Ficha do Oponente' : 'Visualizando Base (Será salvo como Cópia)';
+        // If it's a base template (no gm_id), clear the ID so it's created as new
+        document.getElementById('gm-bestiary-id').value = b.gm_id ? b.id : '';
+
+        document.getElementById('gm-bestiary-name').value = b.name + (b.gm_id ? '' : ' (Cópia)');
+        document.getElementById('gm-bestiary-tier').value = b.tier;
+        document.getElementById('gm-bestiary-diff').value = b.difficulty;
+        document.getElementById('gm-bestiary-type').value = b.type;
+        document.getElementById('gm-bestiary-horde-mult').value = b.horde_multiplier || '';
+        document.getElementById('gm-bestiary-hp').value = b.hp_max;
+        document.getElementById('gm-bestiary-pf').value = b.stress_max;
+        document.getElementById('gm-bestiary-tmajor').value = b.threshold_major || '';
+        document.getElementById('gm-bestiary-tsevere').value = b.threshold_severe || '';
+        document.getElementById('gm-bestiary-motifs').value = b.motivations || '';
+        document.getElementById('gm-bestiary-desc').value = b.description || '';
+
+        if (b.attack) {
+            document.getElementById('gm-atk-mod').value = b.attack.modifier || '';
+            document.getElementById('gm-atk-name').value = b.attack.name || '';
+            document.getElementById('gm-atk-range').value = b.attack.range || 'corpo a corpo';
+            document.getElementById('gm-atk-dmg').value = b.attack.damage || '';
+        }
+
+        document.getElementById('gm-bestiary-xp').value = b.experiences ? JSON.stringify(b.experiences, null, 2) : '[]';
+        document.getElementById('gm-bestiary-hab').value = b.abilities ? JSON.stringify(b.abilities, null, 2) : '[]';
+
+        delBtn.style.display = b.gm_id ? 'inline-block' : 'none'; // Only show delete if user owns it
+        saveBtn.innerText = b.gm_id ? 'Salvar Edições' : 'Criar Minha Cópia';
+    } else {
+        document.getElementById('gm-bestiary-modal-title').innerText = 'Forjar Novo Oponente';
+        document.getElementById('gm-bestiary-id').value = '';
+        saveBtn.innerText = 'Criar Ficha';
+        document.getElementById('gm-bestiary-xp').value = '[]';
+        document.getElementById('gm-bestiary-hab').value = '[]';
+        delBtn.style.display = 'none';
+    }
+
+    toggleHordeMultiplier();
+    modal.style.display = 'flex';
+}
+
+window.openBestiaryModal = openBestiaryModal;
+window.filterBestiary = filterBestiary;
+window.toggleHordeMultiplier = toggleHordeMultiplier;
+
+async function saveBestiaryTemplate() {
+    const id = document.getElementById('gm-bestiary-id').value;
+
+    // Parse the standard attack
+    const attack = {
+        modifier: document.getElementById('gm-atk-mod').value,
+        name: document.getElementById('gm-atk-name').value,
+        range: document.getElementById('gm-atk-range').value,
+        damage: document.getElementById('gm-atk-dmg').value
+    };
+
+    let exp, hab;
+    try {
+        exp = JSON.parse(document.getElementById('gm-bestiary-xp').value || '[]');
+        hab = JSON.parse(document.getElementById('gm-bestiary-hab').value || '[]');
+    } catch (e) {
+        alert("JSON Inválido em Experiências ou Habilidades: " + e.message);
+        return;
+    }
+
+    const payload = {
+        id: id || undefined,
+        name: document.getElementById('gm-bestiary-name').value,
+        tier: document.getElementById('gm-bestiary-tier').value,
+        difficulty: document.getElementById('gm-bestiary-diff').value,
+        type: document.getElementById('gm-bestiary-type').value,
+        horde_multiplier: document.getElementById('gm-bestiary-horde-mult').value || null,
+        hp_max: document.getElementById('gm-bestiary-hp').value,
+        stress_max: document.getElementById('gm-bestiary-pf').value,
+        threshold_major: document.getElementById('gm-bestiary-tmajor').value || null,
+        threshold_severe: document.getElementById('gm-bestiary-tsevere').value || null,
+        motivations: document.getElementById('gm-bestiary-motifs').value,
+        description: document.getElementById('gm-bestiary-desc').value,
+        attack: attack,
+        experiences: exp,
+        abilities: hab
+    };
+
+    try {
+        const action = id ? 'update_bestiary_template' : 'create_bestiary_template';
+        await apiCall(`gm.php?action=${action}`, 'POST', payload);
+        document.getElementById('gm-bestiary-modal').style.display = 'none';
+        initGmView(); // Refresh dashboard
+    } catch (e) {
+        alert("Erro ao salvar: " + e.message);
+    }
+}
+
+async function deleteBestiaryTemplate() {
+    if (!confirm("Excluir esta ficha permanentemente do banco?")) return;
+    const id = document.getElementById('gm-bestiary-id').value;
+    try {
+        await apiCall('gm.php?action=delete_bestiary_template', 'POST', { id });
+        document.getElementById('gm-bestiary-modal').style.display = 'none';
+        initGmView();
+    } catch (e) {
+        alert("Erro: " + e.message);
+    }
+}
+
+window.saveBestiaryTemplate = saveBestiaryTemplate;
+window.deleteBestiaryTemplate = deleteBestiaryTemplate;
+
+// --- Encounter Groups Functions ---
+
+async function createEncounter(sessionId) {
+    const name = document.getElementById('new-encounter-name').value.trim();
+    if (!name) return alert("Digite um nome para o grupo.");
+
+    try {
+        await apiCall('gm.php?action=create_encounter', 'POST', { session_id: sessionId, name });
+        initGmView();
+    } catch (e) { alert(e.message); }
+}
+
+async function deleteEncounter(id, name) {
+    if (!confirm(`Remover permanentemente o grupo '${name}' da sessão? Oponentes dentro dele ficarão soltos na cena.`)) return;
+    try {
+        await apiCall('gm.php?action=delete_encounter', 'POST', { id });
+        initGmView();
+    } catch (e) { alert(e.message); }
+}
+
+function openAddAdvPicker(targetId = null, isFromBestiary = false) {
+    // If isFromBestiary is true, targetId is the template_id and we pick an Encounter Group
+    // If isFromBestiary is false, targetId is the encounter_id and we pick a Template
+
+    let html = `
+        <div class="glass-panel" style="width:95%; max-width:600px; padding:2rem; position:relative; max-height:85vh; overflow-y:auto;">
+            <button onclick="document.getElementById('gm-adv-picker-modal').style.display='none'" style="position:absolute; top:1rem; right:1rem; background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;">&times;</button>
+            <h3 style="color:var(--accent-gold); margin-bottom:1.5rem;">${isFromBestiary ? 'Enviar para qual Grupo?' : 'Adicionar ao Grupo'}</h3>
+            <div style="display:flex; flex-direction:column; gap:0.8rem;">
+    `;
+
+    if (isFromBestiary) {
+        // We are holding a Template, let's list the Encounters to drop it in
+        const encounters = gmState.encounter_groups || [];
+
+        // Option for "Solto na Cena" (No group)
+        html += `
+            <div style="background:rgba(231, 76, 60, 0.1); border:1px dashed #e74c3c; padding:1rem; border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
+                <strong style="color:white; display:block;">Inimigo Avulso (Sem Grupo)</strong>
+                <button class="btn btn-outline" style="border-color:#e74c3c; color:#e74c3c; padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="addAdversaryFromTemplate(${targetId}, null)">
+                    <i class="fas fa-share"></i> Enviar
+                </button>
+            </div>
+        `;
+
+        if (encounters.length === 0) {
+            html += `<p style="color:var(--text-muted)">Nenhum grupo criado na sessão.</p>`;
+        } else {
+            encounters.forEach(enc => {
+                html += `
+                    <div style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); padding:1rem; border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
+                        <strong style="color:white; display:block;"><i class="fas fa-users" style="color:#e74c3c;"></i> ${enc.name}</strong>
+                        <button class="btn btn-outline" style="border-color:var(--accent-gold); color:var(--accent-gold); padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="addAdversaryFromTemplate(${targetId}, ${enc.id})">
+                            <i class="fas fa-share"></i> Enviar
+                        </button>
+                    </div>
+                 `;
+            });
+        }
+    } else {
+        // We are holding an Encounter, let's list the Bestiary to pick from
+        const bList = [...gmState.bestiary].sort((a, b) => a.name.localeCompare(b.name));
+
+        if (bList.length === 0) {
+            html += `<p style="color:var(--text-muted)">Nenhuma ficha no bestiário. Feche e vá na aba Bestiário forjar um oponente.</p>`;
+        } else {
+            // Search Input inside picker
+            html += `
+                <input type="text" id="picker-search" placeholder="Buscar..." style="width:100%; padding:0.6rem; margin-bottom:1rem; background:rgba(0,0,0,0.5); color:white; border:1px solid rgba(255,255,255,0.2); border-radius:4px;" oninput="
+                    const val = this.value.toLowerCase();
+                    document.querySelectorAll('.picker-adv-item').forEach(el => {
+                        el.style.display = el.dataset.name.includes(val) ? 'flex' : 'none';
+                    });
+                ">
+            `;
+
+            bList.forEach(b => {
+                html += `
+                    <div class="picker-adv-item" data-name="${b.name.toLowerCase()}" style="background:rgba(0,0,0,0.5); padding:0.8rem; border-radius:4px; display:flex; justify-content:space-between; align-items:center; border-left:3px solid ${b.gm_id ? 'var(--accent-purple)' : 'rgba(255,255,255,0.2)'};">
+                        <div>
+                            <strong style="color:white; display:block;">${b.name}</strong>
+                            <span style="font-size:0.8rem; color:var(--text-muted);">${b.type} | Tier ${b.tier} | DF ${b.difficulty}</span>
+                        </div>
+                        <button class="btn btn-outline" style="border-color:var(--accent-gold); color:var(--accent-gold); padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="addAdversaryFromTemplate(${b.id}, ${targetId})">
+                            <i class="fas fa-plus"></i> Inserir
+                        </button>
+                    </div>
+                 `;
+            });
+        }
+    }
+
+    html += `</div></div>`;
+
+    let wrap = document.getElementById('gm-adv-picker-modal');
+    if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.id = 'gm-adv-picker-modal';
+        wrap.style.cssText = "display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:2000; align-items:center; justify-content:center;";
+        document.body.appendChild(wrap);
+    }
+    wrap.innerHTML = html;
+    wrap.style.display = 'flex';
+}
+
+async function addAdversaryFromTemplate(templateId, encounterId) {
+    const tpl = gmState.bestiary.find(b => b.id == templateId);
+    if (!tpl) return;
+
+    // Create new adversary from template
+    const payload = {
+        session_id: gmState.session.id,
+        name: tpl.name,
+        type: tpl.type,
+        hp: tpl.hp_max,
+        stress: tpl.stress_max,
+        tier: tpl.tier,
+        encounter_id: encounterId,
+        template_id: templateId
+    };
+
+    try {
+        await apiCall('gm.php?action=add_adversary', 'POST', payload);
+        document.getElementById('gm-adv-picker-modal').style.display = 'none';
+        initGmView();
+        // Switch to session tab to see the change
+        switchGmTab('session');
+    } catch (e) { alert("Erro ao inserir: " + e.message); }
+}
+
+function openBestiaryModalFromTemplate(templateId) {
+    const tpl = gmState.bestiary.find(b => b.id == templateId);
+    if (tpl) {
+        openBestiaryModal(tpl);
+        document.getElementById('gm-bestiary-modal-title').innerText = 'Consulta Rápida de Ficha';
+        document.getElementById('gm-bestiary-save-btn').style.display = 'none';
+        document.getElementById('gm-bestiary-delete-btn').style.display = 'none';
+
+        // Make inputs readonly for quick view
+        const form = document.getElementById('gm-bestiary-form');
+        Array.from(form.elements).forEach(el => el.setAttribute('readonly', true));
+        Array.from(form.getElementsByTagName('select')).forEach(el => el.setAttribute('disabled', true));
+
+        // Small hack to clean it up when closing
+        const closeBtn = document.querySelector('#gm-bestiary-modal button[onclick]');
+        const oldOnclick = closeBtn.onclick;
+        closeBtn.onclick = function () {
+            Array.from(form.elements).forEach(el => el.removeAttribute('readonly'));
+            Array.from(form.getElementsByTagName('select')).forEach(el => el.removeAttribute('disabled'));
+            oldOnclick.call(this);
+            closeBtn.onclick = oldOnclick; // restore
+        };
+    }
+}
+
+window.createEncounter = createEncounter;
+window.deleteEncounter = deleteEncounter;
+window.openAddAdvPicker = openAddAdvPicker;
+window.addAdversaryFromTemplate = addAdversaryFromTemplate;
+window.openBestiaryModalFromTemplate = openBestiaryModalFromTemplate;
