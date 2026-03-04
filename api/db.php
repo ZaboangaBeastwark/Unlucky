@@ -1,11 +1,13 @@
 <?php
 // api/db.php
 
-$host = 'mysql.rpgbearhouse.app.br';
-$db = 'rpgbearhouse';
-$user = 'rpgbearhouse'; // Change if your MySQL user is different
-$pass = '368561rpG';     // Change if your MySQL password is set
-$charset = 'utf8mb4';
+$config = require __DIR__ . '/config.php';
+
+$host = $config['host'];
+$db = $config['db'];
+$user = $config['user'];
+$pass = $config['pass'];
+$charset = $config['charset'];
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
 $options = [
