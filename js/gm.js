@@ -1,4 +1,4 @@
-// js/gm.js
+﻿// js/gm.js
 
 let gmState = {
     session: null,
@@ -8,12 +8,23 @@ let gmState = {
     activeTab: 'session' // 'session' or 'catalog'
 };
 
+window.handleLinkClick = function (event, callback) {
+    if (event.ctrlKey || event.metaKey || event.button === 1 || (event.button === 0 && event.shiftKey)) {
+        return true; // Deixa o navegador abrir em nova aba
+    }
+    event.preventDefault();
+    callback();
+    // Clean up URL so it doesn't stick
+    window.history.pushState({}, '', window.location.pathname);
+    return false;
+};
+
 async function initGmView() {
     const container = document.getElementById('gm-dynamic-area');
     container.innerHTML = `<div class="glass-panel" style="padding: 2rem; text-align: center;">Carregando painel...</div>`;
 
     try {
-        const res = await apiCall('gm.php?action=session_data');
+        const res = await apiCall(`gm.php?action=session_data_live&_t=${Date.now()}`);
         const eqRes = await apiCall('equipment.php?action=list');
 
         gmState.equipment = eqRes.equipment || [];
@@ -26,8 +37,25 @@ async function initGmView() {
             gmState.encounter_groups = res.encounter_groups || [];
             renderGmDashboard(container);
             startGmPolling(); // Initialize auto-sync
+
+            // Multi-Tab Support: Read URL deep links
+            const params = new URLSearchParams(window.location.search);
+            const view = params.get('view');
+            const id = params.get('id');
+            if (view && id) {
+                if (view === 'npc') {
+                    // Slight delay to ensure DOM is ready for modals
+                    setTimeout(() => openBestiaryModalFromTemplate(id), 100);
+                } else if (view === 'pc') {
+                    setTimeout(() => openGmCharacterSheet(id), 100);
+                }
+            }
         } else {
+            console.warn("Mestre sem sessão. Retorno da API:", res);
             renderCreateSession(container);
+            if (res.debug_user) {
+                container.innerHTML += `<p style="color:red">Debug UserID do PHP: ${res.debug_user}</p>`;
+            }
         }
     } catch (e) {
         container.innerHTML = `<div class="error-msg">Erro do Mestre: ${e.message}</div>`;
@@ -41,7 +69,7 @@ function startGmPolling() {
     gmPollInterval = setInterval(async () => {
         try {
             // Fetch raw JSON to avoid state mutation before comparison
-            const rawRes = await fetch(`${API_BASE}gm.php?action=session_data`, { cache: 'no-store' });
+            const rawRes = await fetch(`${API_BASE}gm.php?action=session_data_live&_t=${Date.now()}`, { cache: 'no-store' });
             const data = await rawRes.json();
 
             if (data.session) {
@@ -179,9 +207,9 @@ function renderGmSessionTab(container) {
         charsHtml += `
             <div style="${cardStyle}" onmouseover="this.style.boxShadow='0 0 10px rgba(241,196,15,0.2)';" onmouseout="this.style.boxShadow='none';">
                 <div style="flex-grow:1; min-width:200px;">
-                    <h4 style="color:var(--accent-gold); margin-bottom:0.3rem; font-size:1.3rem; display:flex; align-items:center; gap:0.5rem; cursor:pointer;" onclick="openGmCharacterSheet(${c.id})" title="Clique para Abrir a Ficha do Jogador">
+                    <a href="?view=pc&id=${c.id}" onclick="return window.handleLinkClick(event, () => openGmCharacterSheet(${c.id}))" style="color:var(--accent-gold); margin-bottom:0.3rem; font-size:1.3rem; display:flex; align-items:center; gap:0.5rem; cursor:pointer; text-decoration:none;" title="Clique para Abrir a Ficha do Jogador">
                         ${statusIcon} <i class="fas fa-file-alt" style="font-size:1rem; opacity:0.7;"></i> ${c.name} 
-                    </h4>
+                    </a>
                     <div style="font-size:0.9rem; margin-bottom:0.3rem; color:var(--text-light);">
                         Jogador: <strong style="color:#3498db;">${c.player_name || 'Desconhecido'}</strong>
                     </div>
@@ -210,7 +238,7 @@ function renderGmSessionTab(container) {
                             ${c.evasion_current_override ?? c.evasion_base} <i class="fas fa-pencil-alt" style="font-size:0.8rem;"></i>
                         </b>
                     </div>
-                    <button class="btn btn-primary" onclick="openGmCharacterSheet(${c.id})" style="padding:0.6rem 1.2rem; font-size:0.95rem; display:flex; gap:0.5rem; align-items:center; background:#f1c40f; color:#0f0f13; border:none; font-weight:bold;">Selecionar <i class="fas fa-play"></i></button>
+                    <a href="?view=pc&id=${c.id}" onclick="return window.handleLinkClick(event, () => openGmCharacterSheet(${c.id}))" style="padding:0.6rem 1.2rem; font-size:0.95rem; display:inline-flex; gap:0.5rem; align-items:center; background:#f1c40f; color:#0f0f13; border:none; font-weight:bold; text-decoration:none; border-radius:4px;">Selecionar <i class="fas fa-play"></i></a>
                 </div>
             </div>
         `;
@@ -250,13 +278,20 @@ function renderGmSessionTab(container) {
     });
 
     function renderAdvCard(a) {
+        const imageHtml = a.token || a.avatar
+            ? `<img src="${a.token || a.avatar}" style="width:40px; height:40px; border-radius:50%; object-fit:cover; border:2px solid #e74c3c; margin-right:10px;">`
+            : `<div style="width:40px; height:40px; border-radius:50%; background:rgba(231,76,60,0.2); border:2px solid rgba(231,76,60,0.5); display:flex; align-items:center; justify-content:center; margin-right:10px;"><i class="fas fa-ghost" style="color:#e74c3c;"></i></div>`;
+
         return `
             <div style="background:rgba(231, 76, 60, 0.1); padding:0.8rem; border-radius:8px; border:1px solid rgba(231, 76, 60, 0.3); margin-bottom:0.5rem; display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <h4 style="color:#e74c3c; margin-bottom:0.2rem; font-size:1rem;">${a.name}</h4>
-                    <div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;">
-                        ${a.type} | Tier ${a.tier}
-                        ${a.template_id ? `<button onclick="openBestiaryModalFromTemplate(${a.template_id})" style="background:none; border:none; color:var(--accent-gold); cursor:pointer; margin-left:5px;" title="Ver Ficha Completa"><i class="fas fa-search"></i></button>` : ''}
+                <div style="display:flex; align-items:center;">
+                    ${imageHtml}
+                    <div>
+                        <h4 style="color:#e74c3c; margin-bottom:0.2rem; font-size:1rem;">${a.name}</h4>
+                        <div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;">
+                            ${a.type} | Tier ${a.tier}
+                            ${a.template_id ? `<a href="?view=npc&id=${a.template_id}" onclick="return window.handleLinkClick(event, () => openBestiaryModalFromTemplate(${a.template_id}))" style="background:none; border:none; color:var(--accent-gold); cursor:pointer; margin-left:5px; text-decoration:none;" title="Ver Ficha Completa"><i class="fas fa-search"></i></a>` : ''}
+                        </div>
                     </div>
                 </div>
                 <div style="display:flex; gap:0.5rem; align-items:center;">
@@ -831,39 +866,48 @@ function generateBestiaryCardsHTML(list) {
         const borderColor = isCanonical ? 'rgba(255,255,255,0.2)' : 'var(--accent-purple)';
         const tagColor = isCanonical ? '#7f8c8d' : '#9b59b6';
 
+        const imageHtml = b.avatar || b.token
+            ? `<div style="float:right; margin-left:15px; margin-bottom:10px;"><img src="${b.avatar || b.token}" style="width:80px; height:80px; border-radius:12px; object-fit:cover; border:2px solid ${tagColor}; box-shadow:0 0 10px rgba(0,0,0,0.5);"></div>`
+            : '';
+
         html += `
-            <div class="glass-panel" style="padding:1.5rem; text-align:left; border:1px solid ${borderColor}; position:relative;">
+            <div class="glass-panel" style="padding:1.5rem; text-align:left; border:1px solid ${borderColor}; position:relative; display:flex; flex-direction:column; justify-content:space-between;">
                 ${isCanonical ? `<span style="position:absolute; top:10px; right:10px; font-size:0.7rem; background:${tagColor}; color:white; padding:2px 6px; border-radius:4px; opacity:0.7;">Livro Base</span>` : ''}
                 
-                <h4 style="color:var(--accent-gold); margin-bottom:0.2rem; font-size:1.2rem;">${b.name}</h4>
-                <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem; display:flex; gap:10px;">
-                    <span style="border-right:1px solid rgba(255,255,255,0.2); padding-right:10px;">Tier ${b.tier}</span>
-                    <span style="border-right:1px solid rgba(255,255,255,0.2); padding-right:10px; font-weight:bold;">${b.type}</span>
-                    <span>DF: ${b.difficulty}</span>
+                <div style="flex:1;">
+                    ${imageHtml}
+                    <h4 style="color:var(--accent-gold); margin-bottom:0.2rem; font-size:1.2rem; max-width: ${imageHtml ? '70%' : '100%'}">${b.name}</h4>
+                    <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem; display:flex; gap:10px;">
+                        <span style="border-right:1px solid rgba(255,255,255,0.2); padding-right:10px;">Tier ${b.tier}</span>
+                        <span style="border-right:1px solid rgba(255,255,255,0.2); padding-right:10px; font-weight:bold;">${b.type}</span>
+                        <span>DF: ${b.difficulty}</span>
+                    </div>
+                    
+                    <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.3); padding:0.5rem; border-radius:4px; margin-bottom:1rem; clear:both;">
+                        <div style="text-align:center;">
+                            <span style="font-size:0.7rem; color:var(--text-muted); display:block;">PV</span>
+                            <b>${b.hp_max}</b>
+                        </div>
+                        <div style="text-align:center;">
+                            <span style="font-size:0.7rem; color:var(--text-muted); display:block;">Fadiga</span>
+                            <b>${b.stress_max}</b>
+                        </div>
+                        <div style="text-align:center;">
+                            <span style="font-size:0.7rem; color:var(--text-muted); display:block;">Dano (M / G)</span>
+                            <b style="color:#e67e22;">${b.threshold_major || '-'}</b> / <b style="color:#e74c3c;">${b.threshold_severe || '-'}</b>
+                        </div>
+                    </div>
+                    
+                    <p style="font-size:0.85rem; color:var(--text-light); margin-bottom:1.5rem; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-overflow:ellipsis;">
+                        ${b.description || b.motivations || 'Sem descrição.'}
+                    </p>
                 </div>
                 
-                <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.3); padding:0.5rem; border-radius:4px; margin-bottom:1rem;">
-                    <div style="text-align:center;">
-                        <span style="font-size:0.7rem; color:var(--text-muted); display:block;">PV</span>
-                        <b>${b.hp_max}</b>
-                    </div>
-                    <div style="text-align:center;">
-                        <span style="font-size:0.7rem; color:var(--text-muted); display:block;">Fadiga</span>
-                        <b>${b.stress_max}</b>
-                    </div>
-                    <div style="text-align:center;">
-                        <span style="font-size:0.7rem; color:var(--text-muted); display:block;">Dano (M / G)</span>
-                        <b style="color:#e67e22;">${b.threshold_major || '-'}</b> / <b style="color:#e74c3c;">${b.threshold_severe || '-'}</b>
-                    </div>
-                </div>
-                
-                <p style="font-size:0.85rem; color:var(--text-light); margin-bottom:1.5rem; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-overflow:ellipsis;">
-                    ${b.description || b.motivations || 'Sem descrição.'}
-                </p>
-                
-                <div style="display:flex; gap:0.5rem;">
-                    <button class="btn btn-outline" style="flex:1; padding:0.5rem; border-color:var(--accent-purple); color:white;" onclick='openBestiaryModal(${JSON.stringify(b).replace(/'/g, "&#39;")})'><i class="fas fa-search"></i> Detalhes</button>
-                    ${gmState.session ? `<button class="btn btn-primary" style="flex:1; padding:0.5rem; background:linear-gradient(135deg, #e74c3c, #c0392b);" onclick="openAddAdvPicker(${b.id}, true)"><i class="fas fa-plus"></i> Cena</button>` : ''}
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-top:auto;">
+                    <a href="?view=npc&id=${b.id}" class="btn btn-outline" style="flex:1; padding:0.6rem; border-color:var(--accent-purple); color:white; text-decoration:none; text-align:center; font-size:0.9rem;" onclick="return window.handleLinkClick(event, () => openBestiaryModalFromTemplate(${b.id}))">
+                        <i class="fas fa-edit"></i> Editar
+                    </a>
+                    ${gmState.session ? `<button class="btn btn-primary" style="padding:0.6rem 1rem; background:linear-gradient(135deg, #e74c3c, #c0392b); font-size:0.9rem;" title="Adicionar à Cena" onclick="openAddAdvPicker(${b.id}, true)"><i class="fas fa-plus"></i></button>` : ''}
                 </div>
             </div>
         `;
@@ -906,15 +950,24 @@ function openBestiaryModal(b = null) {
     const form = document.getElementById('gm-bestiary-form');
 
     const saveBtn = document.getElementById('gm-bestiary-save-btn');
+
+    // Unlock form in case it was explicitly locked by the Quick View modal
+    Array.from(form.elements).forEach(el => el.removeAttribute('readonly'));
+    Array.from(form.getElementsByTagName('select')).forEach(el => el.removeAttribute('disabled'));
+    saveBtn.style.display = 'block';
+
+    const duplicateBtn = document.getElementById('gm-bestiary-duplicate-btn');
+
     form.reset();
     document.getElementById('gm-bestiary-horde-mult').value = '';
 
     if (b) {
-        document.getElementById('gm-bestiary-modal-title').innerText = b.gm_id ? 'Ficha do Oponente' : 'Visualizando Base (Será salvo como Cópia)';
-        // If it's a base template (no gm_id), clear the ID so it's created as new
-        document.getElementById('gm-bestiary-id').value = b.gm_id ? b.id : '';
+        document.getElementById('gm-bestiary-modal-title').innerText = 'Ficha do Oponente';
 
-        document.getElementById('gm-bestiary-name').value = b.name + (b.gm_id ? '' : ' (Cópia)');
+        // Everyone edits the exact ID now
+        document.getElementById('gm-bestiary-id').value = b.id;
+
+        document.getElementById('gm-bestiary-name').value = b.name;
         document.getElementById('gm-bestiary-tier').value = b.tier;
         document.getElementById('gm-bestiary-diff').value = b.difficulty;
         document.getElementById('gm-bestiary-type').value = b.type;
@@ -926,6 +979,9 @@ function openBestiaryModal(b = null) {
         document.getElementById('gm-bestiary-motifs').value = b.motivations || '';
         document.getElementById('gm-bestiary-desc').value = b.description || '';
 
+        document.getElementById('gm-bestiary-avatar-url').value = b.avatar || '';
+        document.getElementById('gm-bestiary-avatar-img').src = b.avatar || 'img/default_avatar.png';
+
         if (b.attack) {
             document.getElementById('gm-atk-mod').value = b.attack.modifier || '';
             document.getElementById('gm-atk-name').value = b.attack.name || '';
@@ -933,18 +989,23 @@ function openBestiaryModal(b = null) {
             document.getElementById('gm-atk-dmg').value = b.attack.damage || '';
         }
 
-        document.getElementById('gm-bestiary-xp').value = b.experiences ? JSON.stringify(b.experiences, null, 2) : '[]';
-        document.getElementById('gm-bestiary-hab').value = b.abilities ? JSON.stringify(b.abilities, null, 2) : '[]';
+        renderBestiaryXp(b.experiences || []);
+        renderBestiaryHab(b.abilities || []);
 
         delBtn.style.display = b.gm_id ? 'inline-block' : 'none'; // Only show delete if user owns it
-        saveBtn.innerText = b.gm_id ? 'Salvar Edições' : 'Criar Minha Cópia';
+        duplicateBtn.style.display = 'inline-block';
+        saveBtn.innerText = 'Salvar Edições';
     } else {
         document.getElementById('gm-bestiary-modal-title').innerText = 'Forjar Novo Oponente';
         document.getElementById('gm-bestiary-id').value = '';
         saveBtn.innerText = 'Criar Ficha';
-        document.getElementById('gm-bestiary-xp').value = '[]';
-        document.getElementById('gm-bestiary-hab').value = '[]';
+        renderBestiaryXp([]);
+        renderBestiaryHab([]);
         delBtn.style.display = 'none';
+        duplicateBtn.style.display = 'none';
+
+        document.getElementById('gm-bestiary-avatar-url').value = '';
+        document.getElementById('gm-bestiary-avatar-img').src = '';
     }
 
     toggleHordeMultiplier();
@@ -966,13 +1027,24 @@ async function saveBestiaryTemplate() {
         damage: document.getElementById('gm-atk-dmg').value
     };
 
-    let exp, hab;
-    try {
-        exp = JSON.parse(document.getElementById('gm-bestiary-xp').value || '[]');
-        hab = JSON.parse(document.getElementById('gm-bestiary-hab').value || '[]');
-    } catch (e) {
-        alert("JSON Inválido em Experiências ou Habilidades: " + e.message);
-        return;
+    let exp = [];
+    document.querySelectorAll('.gm-xp-row').forEach(row => {
+        const name = row.querySelector('.xp-name').value.trim();
+        const modifier = row.querySelector('.xp-mod').value.trim();
+        if (name || modifier) exp.push({ name, modifier });
+    });
+
+    let hab = [];
+    document.querySelectorAll('.gm-hab-row').forEach(row => {
+        const type = row.querySelector('.hab-type').value;
+        const name = row.querySelector('.hab-name').value.trim();
+        const description = row.querySelector('.hab-desc').value.trim();
+        if (name || description) hab.push({ type, name, description });
+    });
+
+    let avatarUrl = document.getElementById('gm-bestiary-avatar-img').src;
+    if (avatarUrl.includes("placeholder") || avatarUrl.endsWith("index.html") || avatarUrl === window.location.href || avatarUrl.includes("img/default_avatar")) {
+        avatarUrl = null;
     }
 
     const payload = {
@@ -990,8 +1062,12 @@ async function saveBestiaryTemplate() {
         description: document.getElementById('gm-bestiary-desc').value,
         attack: attack,
         experiences: exp,
-        abilities: hab
+        abilities: hab,
+        avatar: avatarUrl,
+        token: avatarUrl
     };
+
+    console.log("PAYLOAD INDO PRO SERVIDOR:", payload);
 
     try {
         const action = id ? 'update_bestiary_template' : 'create_bestiary_template';
@@ -1017,6 +1093,110 @@ async function deleteBestiaryTemplate() {
 
 window.saveBestiaryTemplate = saveBestiaryTemplate;
 window.deleteBestiaryTemplate = deleteBestiaryTemplate;
+window.duplicateBestiaryTemplate = duplicateBestiaryTemplate;
+
+// ==========================================
+// BESTIARY DYNAMIC ARRAYS UI
+// ==========================================
+
+function renderBestiaryXp(experiences) {
+    const list = document.getElementById('gm-bestiary-xp-list');
+    list.innerHTML = '';
+    experiences.forEach(ex => addBestiaryXpRow(ex.name, ex.modifier));
+}
+
+function addBestiaryXpRow(name = '', modifier = '') {
+    const list = document.getElementById('gm-bestiary-xp-list');
+    const div = document.createElement('div');
+    div.className = 'gm-xp-row input-group';
+    div.style = 'display:grid; grid-template-columns: 1fr 80px 40px; gap:10px; align-items:center; background:rgba(0,0,0,0.3); padding:0.5rem; border-radius:4px; border:1px solid rgba(255,255,255,0.1);';
+    div.innerHTML = `
+        <input type="text" class="xp-name" placeholder="Nome (Ex: Ladino)" value="${name}" style="padding:0.4rem; border-radius:4px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:white;">
+        <input type="text" class="xp-mod" placeholder="Mod (+2)" value="${modifier}" style="padding:0.4rem; border-radius:4px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:white;">
+        <button type="button" class="btn btn-outline" style="border-color:#e74c3c; color:#e74c3c; padding:0.4rem;" onclick="this.parentElement.remove()" title="Remover"><i class="fas fa-trash"></i></button>
+    `;
+    list.appendChild(div);
+}
+
+function renderBestiaryHab(abilities) {
+    const list = document.getElementById('gm-bestiary-hab-list');
+    list.innerHTML = '';
+    abilities.forEach(ab => addBestiaryHabRow(ab.type, ab.name, ab.description));
+}
+
+function addBestiaryHabRow(type = 'passive', name = '', desc = '') {
+    const list = document.getElementById('gm-bestiary-hab-list');
+    const div = document.createElement('div');
+    div.className = 'gm-hab-row input-group';
+    div.style = 'background:rgba(0,0,0,0.3); padding:0.5rem; border-radius:4px; border:1px solid rgba(255,255,255,0.1); display:flex; flex-direction:column; gap:0.5rem; position:relative;';
+    div.innerHTML = `
+        <div style="display:grid; grid-template-columns: 120px 1fr auto; gap:10px;">
+            <select class="hab-type" style="padding:0.4rem; border-radius:4px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:white;">
+                <option value="passive" ${type === 'passive' ? 'selected' : ''}>Passiva</option>
+                <option value="action" ${type === 'action' ? 'selected' : ''}>Ação</option>
+                <option value="reaction" ${type === 'reaction' ? 'selected' : ''}>Reação</option>
+                <option value="fear" ${type === 'fear' ? 'selected' : ''}>Medo</option>
+            </select>
+            <input type="text" class="hab-name" placeholder="Nome da Habilidade" value="${name}" style="padding:0.4rem; border-radius:4px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:white;">
+            <button type="button" class="btn btn-outline" style="border-color:#e74c3c; color:#e74c3c; padding:0.4rem 0.8rem;" onclick="this.parentElement.parentElement.remove()" title="Remover"><i class="fas fa-trash"></i> Remover</button>
+        </div>
+        <textarea class="hab-desc" rows="2" placeholder="Descrição da habilidade..." style="width:100%; padding:0.6rem; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); border-radius:4px; color:white;">${desc}</textarea>
+    `;
+    list.appendChild(div);
+}
+
+window.addBestiaryXpRow = addBestiaryXpRow;
+window.addBestiaryHabRow = addBestiaryHabRow;
+window.duplicateBestiaryTemplate = duplicateBestiaryTemplate;
+
+async function duplicateBestiaryTemplate() {
+    // Treat the current form data as a brand new insert but with '(Cópia)' appended
+    document.getElementById('gm-bestiary-id').value = '';
+    const nameField = document.getElementById('gm-bestiary-name');
+    if (!nameField.value.endsWith('(Cópia)')) {
+        nameField.value = nameField.value + ' (Cópia)';
+    }
+
+    // Switch the UI to 'Creating' mode visually
+    document.getElementById('gm-bestiary-modal-title').innerText = 'Forjar Novo Oponente (Cópia)';
+    document.getElementById('gm-bestiary-delete-btn').style.display = 'none';
+    document.getElementById('gm-bestiary-duplicate-btn').style.display = 'none';
+    document.getElementById('gm-bestiary-save-btn').innerText = 'Salvar Cópia';
+
+    alert("Oponente marcado para cópia! Altere o que quiser e clique em 'Salvar Cópia'.");
+}
+
+// Image Upload (Base64)
+window.uploadAdversaryImage = function (inputEl, type) {
+    if (!inputEl.files || !inputEl.files[0]) return;
+
+    const file = inputEl.files[0];
+
+    // Check file size (optional safety restriction, e.g., 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+        alert("A imagem é muito grande. Escolha uma imagem de até 2MB para não sobrecarregar o banco de dados.");
+        inputEl.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        const base64Url = e.target.result;
+
+        // Update hidden input and image preview
+        document.getElementById(`gm-bestiary-${type}-url`).value = base64Url;
+        document.getElementById(`gm-bestiary-${type}-img`).src = base64Url;
+    };
+
+    reader.onerror = function () {
+        alert("Erro ao ler o arquivo de imagem.");
+    };
+
+    reader.readAsDataURL(file);
+
+    // Reset file input so same file can be selected again
+    inputEl.value = '';
+};
 
 // --- Encounter Groups Functions ---
 
@@ -1136,7 +1316,9 @@ async function addAdversaryFromTemplate(templateId, encounterId) {
         stress: tpl.stress_max,
         tier: tpl.tier,
         encounter_id: encounterId,
-        template_id: templateId
+        template_id: templateId,
+        avatar: tpl.avatar,
+        token: tpl.token
     };
 
     try {
@@ -1152,24 +1334,6 @@ function openBestiaryModalFromTemplate(templateId) {
     const tpl = gmState.bestiary.find(b => b.id == templateId);
     if (tpl) {
         openBestiaryModal(tpl);
-        document.getElementById('gm-bestiary-modal-title').innerText = 'Consulta Rápida de Ficha';
-        document.getElementById('gm-bestiary-save-btn').style.display = 'none';
-        document.getElementById('gm-bestiary-delete-btn').style.display = 'none';
-
-        // Make inputs readonly for quick view
-        const form = document.getElementById('gm-bestiary-form');
-        Array.from(form.elements).forEach(el => el.setAttribute('readonly', true));
-        Array.from(form.getElementsByTagName('select')).forEach(el => el.setAttribute('disabled', true));
-
-        // Small hack to clean it up when closing
-        const closeBtn = document.querySelector('#gm-bestiary-modal button[onclick]');
-        const oldOnclick = closeBtn.onclick;
-        closeBtn.onclick = function () {
-            Array.from(form.elements).forEach(el => el.removeAttribute('readonly'));
-            Array.from(form.getElementsByTagName('select')).forEach(el => el.removeAttribute('disabled'));
-            oldOnclick.call(this);
-            closeBtn.onclick = oldOnclick; // restore
-        };
     }
 }
 
@@ -1178,3 +1342,4 @@ window.deleteEncounter = deleteEncounter;
 window.openAddAdvPicker = openAddAdvPicker;
 window.addAdversaryFromTemplate = addAdversaryFromTemplate;
 window.openBestiaryModalFromTemplate = openBestiaryModalFromTemplate;
+
