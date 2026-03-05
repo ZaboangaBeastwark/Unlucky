@@ -1,9 +1,16 @@
 <?php
 // api/character.php
-session_start();
+require_once __DIR__ . '/session.php';
 require_once 'db.php';
 
 header('Content-Type: application/json');
+
+// Keep session alive during polling
+if (isset($_SESSION['user_id'])) {
+    if (!isset($_SESSION['last_activity']) || time() - $_SESSION['last_activity'] > 300) {
+        $_SESSION['last_activity'] = time();
+    }
+}
 
 if (!isset($_SESSION['user_id'])) {
     jsonResponse(['error' => 'Not authenticated'], 401);

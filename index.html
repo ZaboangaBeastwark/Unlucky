@@ -15,9 +15,12 @@
     <div id="app">
         <!-- Auth View -->
         <main id="view-auth" class="view active glass-panel">
-            <div class="auth-container">
-                <h1 class="logo-text">Daggerheart</h1>
-                <p class="subtitle">Nexus de Aventura</p>
+            <div class="auth-container" style="text-align: center; position: relative;">
+                <div
+                    style="position: absolute; top: 1.5rem; left: 1.5rem; font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-body);">
+                    Glauber apresenta:</div>
+                <h1 class="logo-text" style="margin-top: 1rem;">Unlucky</h1>
+                <p class="subtitle" style="font-size: 0.95rem;">Um sistema feito para jogar DaggerHeart</p>
 
                 <div class="tabs">
                     <button class="tab-btn active" data-target="login-form">Login</button>
@@ -56,6 +59,9 @@
                     <button type="submit" class="btn btn-primary w-100">Criar Conta</button>
                     <div class="error-msg" id="reg-error"></div>
                 </form>
+
+                <div style="text-align: center; margin-top: 1.5rem; font-size: 0.7rem; color: rgba(255,255,255,0.3);">
+                    Versão Alfa 0.1</div>
             </div>
         </main>
 
@@ -209,6 +215,25 @@
 
                     <h3 style="color:#d35400; border-bottom:1px solid #d35400; margin-bottom:1rem; padding-bottom:5px;">
                         Dados Básicos e Lore</h3>
+
+                    <div
+                        style="display:flex; justify-content:center; margin-bottom:1.5rem; background:rgba(0,0,0,0.3); padding:1.5rem; border-radius:8px; border:1px solid rgba(255,255,255,0.1);">
+                        <div style="text-align:center;">
+                            <label
+                                style="display:block; color:var(--accent-gold); font-size:1rem; margin-bottom:10px;">Avatar
+                                / Imagem do Oponente</label>
+                            <img id="gm-bestiary-avatar-img" src="img/default_avatar.png"
+                                style="width:120px; height:120px; object-fit:cover; border-radius:50%; border:3px solid var(--accent-purple); cursor:pointer; background:#1a1a1a; box-shadow: 0 0 15px rgba(155, 89, 182, 0.4);"
+                                onclick="document.getElementById('gm-bestiary-avatar-input').click()"
+                                title="Clique para alterar a imagem" onerror="this.onerror=null; this.src=''">
+                            <p style="font-size:0.75rem; color:var(--text-muted); margin-top:10px;">O token gerado será
+                                baseado nesta imagem.</p>
+                            <input type="file" id="gm-bestiary-avatar-input" style="display:none;"
+                                accept="image/png, image/jpeg, image/webp"
+                                onchange="uploadAdversaryImage(this, 'avatar')">
+                            <input type="hidden" id="gm-bestiary-avatar-url">
+                        </div>
+                    </div>
                     <div style="display:grid; grid-template-columns: 2fr 1fr; gap:1rem;">
                         <div class="input-group">
                             <label>Nome da Ficha</label>
@@ -275,15 +300,15 @@
                     <div class="input-group" style="margin-top:1rem;">
                         <label>Descrição Opcional</label>
                         <textarea id="gm-bestiary-desc" rows="2"
+                            style="width:100%; padding:0.8rem; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); border-radius:8px; color:white; font-family:var(--font-body);"
                             placeholder="Um criminoso ardiloso de capa usa uma faca..."></textarea>
                     </div>
 
                     <h3
                         style="color:#d35400; border-bottom:1px solid #d35400; margin-top:2rem; margin-bottom:1rem; padding-bottom:5px;">
                         Ataque e Regras</h3>
-                    <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:1rem;">Configure o ataque padrão.
-                        As outras habilidades e experiências podem ser preenchidas como JSON bruto nesta primeira versão
-                        do Módulo.</p>
+                    <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:1rem;">Configure o ataque padrão
+                        e adicione as características especiais do oponente.</p>
 
                     <div class="input-group"
                         style="border-left:3px solid #f39c12; padding-left:10px; margin-bottom:1rem;">
@@ -302,24 +327,39 @@
                     </div>
 
                     <div class="input-group" style="margin-top:1rem;">
-                        <label>Experiências (JSON Array)</label>
-                        <textarea id="gm-bestiary-xp" rows="2"
-                            placeholder='[{"name": "Ladino", "modifier": "+2"}]'></textarea>
+                        <div
+                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                            <label style="margin:0;">Experiências</label>
+                            <button type="button" class="btn btn-outline"
+                                style="padding:0.3rem 0.8rem; font-size:0.8rem; border-color:#3498db; color:#3498db;"
+                                onclick="addBestiaryXpRow()">+ Experiência</button>
+                        </div>
+                        <div id="gm-bestiary-xp-list" style="display:flex; flex-direction:column; gap:0.5rem;">
+                            <!-- Dynamic XP rows -->
+                        </div>
                     </div>
 
                     <div class="input-group" style="margin-top:1rem;">
-                        <label>Habilidades Especiais (JSON Array)</label>
-                        <textarea id="gm-bestiary-hab" rows="5"
-                            placeholder='[{"type":"passive", "name":"Aqui em Cima", "description":"quando acerta..."}]'></textarea>
-                        <small style="color:var(--text-muted);">Formatos suportados: {"type":
-                            "passive|action|reaction|fear", "name": "...", "description": "..."}</small>
+                        <div
+                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                            <label style="margin:0;">Habilidades Especiais</label>
+                            <button type="button" class="btn btn-outline"
+                                style="padding:0.3rem 0.8rem; font-size:0.8rem; border-color:var(--accent-purple); color:var(--accent-purple);"
+                                onclick="addBestiaryHabRow()">+ Habilidade</button>
+                        </div>
+                        <div id="gm-bestiary-hab-list" style="display:flex; flex-direction:column; gap:0.5rem;">
+                            <!-- Dynamic Ability rows -->
+                        </div>
                     </div>
 
                     <div style="display:flex; justify-content:space-between; margin-top:2rem;">
-                        <div>
+                        <div style="display:flex; gap:1rem;">
                             <button type="button" id="gm-bestiary-delete-btn" class="btn btn-outline"
                                 style="border-color:#e74c3c; color:#e74c3c; display:none;"
                                 onclick="deleteBestiaryTemplate()">Excluir Ficha</button>
+                            <button type="button" id="gm-bestiary-duplicate-btn" class="btn btn-outline"
+                                style="border-color:var(--accent-purple); color:var(--accent-purple); display:none;"
+                                onclick="duplicateBestiaryTemplate()"><i class="fas fa-copy"></i> Criar Cópia</button>
                         </div>
                         <div style="display:flex; gap:1rem;">
                             <button type="button" class="btn btn-outline"
@@ -357,10 +397,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="js/api.js?v=2"></script>
     <script src="js/auth.js?v=2"></script>
-    <script src="js/dh_data.js?v=2"></script>
-    <script src="js/player.js?v=2"></script>
-    <script src="js/gm.js?v=8"></script>
-    <script src="js/app.js?v=2"></script>
+    <script src="js/dh_data.js?v=3"></script>
+    <script src="js/player.js?v=3"></script>
+    <script src="js/gm.js?v=21"></script>
+    <script src="js/app.js?v=4"></script>
 </body>
 
 </html>

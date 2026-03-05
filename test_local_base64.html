@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+    <img id="gm-bestiary-avatar-img" src="https://via.placeholder.com/150?text=Avatar">
+    <input type="file" id="gm-bestiary-avatar-input" accept="image/png, image/jpeg, image/webp">
+    <button onclick="test()">Test Save</button>
+    <div id="output"></div>
+    <script>
+        document.getElementById('gm-bestiary-avatar-input').onchange = function () {
+            const file = this.files[0];
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                document.getElementById('gm-bestiary-avatar-img').src = e.target.result;
+                document.getElementById('output').innerHTML += "File loaded into IMG.<br>";
+            };
+            reader.readAsDataURL(file);
+        };
+
+        function test() {
+            let avatarUrl = document.getElementById('gm-bestiary-avatar-img').src;
+            if (avatarUrl.includes("placeholder")) avatarUrl = null;
+            document.getElementById('output').innerHTML += "Read from IMG: " + (avatarUrl ? avatarUrl.substring(0, 50) + "..." : "null") + " (Length: " + (avatarUrl ? avatarUrl.length : 0) + ")<br>";
+        }
+    </script>
+</body>
+
+</html>

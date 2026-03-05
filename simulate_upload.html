@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Simulate Payload</title>
+</head>
+
+<body>
+    <input type="file" id="f">
+    <button onclick="send()">Test Send to API</button>
+    <div id="res"></div>
+    <script>
+        async function send() {
+            const f = document.getElementById('f').files[0];
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const b64 = e.target.result;
+                const payload = {
+                    name: "Simulated Monstr",
+                    tier: 1, difficulty: 10, type: "Comum",
+                    hp_max: 10, stress_max: 10,
+                    avatar: b64, token: b64,
+                    motivations: '', description: '', attack: {}, experiences: [], abilities: []
+                };
+                document.getElementById('res').innerText = "Sending " + b64.length + " bytes...";
+                try {
+                    const res = await fetch('api/gm.php?action=create_bestiary_template', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const txt = await res.text();
+                    document.getElementById('res').innerText += "\nResponse: " + txt;
+                } catch (err) {
+                    document.getElementById('res').innerText += "\nError: " + err.message;
+                }
+            };
+            reader.readAsDataURL(f);
+        }
+    </script>
+</body>
+
+</html>

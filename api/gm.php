@@ -1,26 +1,29 @@
 <?php
 // api/gm.php
-session_start();
+require_once __DIR__ . '/session.php';
 require_once 'db.php';
 
 header('Content-Type: application/json');
 
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'gm') {
-    jsonResponse(['error' => 'Unauthorized. GM access required.'], 403);
+// Keep session alive during GM polling
+if (isset($_SESSION['user_id'])) {
+    $_SESSION['last_activity'] = time();
 }
+
+requireGM();
 
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
 
 if ($method === 'GET') {
-    if ($action === 'session_data') {
+    if ($action === 'session_data_live') {
         // Get active session
         $stmt = $pdo->prepare('SELECT * FROM sessions WHERE gm_id = ? ORDER BY id DESC LIMIT 1');
         $stmt->execute([$_SESSION['user_id']]);
         $session = $stmt->fetch();
 
         if (!$session) {
-            jsonResponse(['session' => null]);
+            jsonResponse(['session' => null, 'debug_user' => $_SESSION['user_id'] ?? 'NONE']);
         }
 
         // Get characters in this session
@@ -104,10 +107,12 @@ if ($method === 'GET') {
         $tier = (int) ($input['tier'] ?? 1);
         $encounterId = isset($input['encounter_id']) ? (int) $input['encounter_id'] : null;
         $templateId = isset($input['template_id']) ? (int) $input['template_id'] : null;
+        $avatar = $input['avatar'] ?? null;
+        $token = $input['token'] ?? null;
 
-        $stmt = $pdo->prepare('INSERT INTO adversaries (session_id, name, type, hp, stress, tier, encounter_id, template_id, current_hp, current_stress) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)');
+        $stmt = $pdo->prepare('INSERT INTO adversaries (session_id, name, type, hp, stress, tier, encounter_id, template_id, avatar, token, current_hp, current_stress) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)');
         // Current HP defaults to max HP initially
-        $stmt->execute([$sessionId, $name, $type, $hp, $stress, $tier, $encounterId, $templateId, $hp]);
+        $stmt->execute([$sessionId, $name, $type, $hp, $stress, $tier, $encounterId, $templateId, $avatar, $token, $hp]);
         jsonResponse(['message' => 'Adversary added', 'id' => $pdo->lastInsertId()]);
     }
 
@@ -149,7 +154,7 @@ if ($method === 'GET') {
 
     // Bestiary Templates (Custom Monsters for GM)
     if ($action === 'create_bestiary_template') {
-        $stmt = $pdo->prepare('INSERT INTO adversary_templates (gm_id, name, tier, type, difficulty, hp_max, stress_max, threshold_major, threshold_severe, horde_multiplier, description, motivations, attack, experiences, abilities) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $stmt = $pdo->prepare('INSERT INTO adversary_templates (gm_id, name, tier, type, difficulty, hp_max, stress_max, threshold_major, threshold_severe, horde_multiplier, description, motivations, attack, experiences, abilities, avatar, token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         $stmt->execute([
             $_SESSION['user_id'],
             $input['name'] ?? 'Novo Oponente',
@@ -165,15 +170,17 @@ if ($method === 'GET') {
             $input['motivations'] ?? '',
             json_encode($input['attack'] ?? []),
             json_encode($input['experiences'] ?? []),
-            json_encode($input['abilities'] ?? [])
+            json_encode($input['abilities'] ?? []),
+            $input['avatar'] ?? null,
+            $input['token'] ?? null
         ]);
         jsonResponse(['message' => 'Template created', 'id' => $pdo->lastInsertId()]);
     }
 
     if ($action === 'update_bestiary_template') {
-        // A GM can only update their own templates (gm_id = their id, not NULL canonical)
+        // A GM can now update any template, even the base book ones
         $id = $input['id'];
-        $stmt = $pdo->prepare('UPDATE adversary_templates SET name=?, tier=?, type=?, difficulty=?, hp_max=?, stress_max=?, threshold_major=?, threshold_severe=?, horde_multiplier=?, description=?, motivations=?, attack=?, experiences=?, abilities=? WHERE id = ? AND gm_id = ?');
+        $stmt = $pdo->prepare('UPDATE adversary_templates SET name=?, tier=?, type=?, difficulty=?, hp_max=?, stress_max=?, threshold_major=?, threshold_severe=?, horde_multiplier=?, description=?, motivations=?, attack=?, experiences=?, abilities=?, avatar=?, token=? WHERE id = ?');
         $stmt->execute([
             $input['name'],
             (int) $input['tier'],
@@ -189,13 +196,24 @@ if ($method === 'GET') {
             json_encode($input['attack'] ?? []),
             json_encode($input['experiences'] ?? []),
             json_encode($input['abilities'] ?? []),
-            $id,
-            $_SESSION['user_id']
+            $input['avatar'] ?? null,
+            $input['token'] ?? null,
+            $id
         ]);
-        if ($stmt->rowCount() > 0) {
+        if ($stmt->rowCount() >= 0) {
+            // Se as imagens foram atualizadas, propague para todos os monstros ativos dessa ficha!
+            if (isset($input['avatar']) || isset($input['token'])) {
+                $stmtActive = $pdo->prepare('UPDATE adversaries SET avatar=?, token=? WHERE template_id=? AND session_id IN (SELECT id FROM sessions WHERE gm_id=?)');
+                $stmtActive->execute([
+                    $input['avatar'] ?? null,
+                    $input['token'] ?? null,
+                    $id,
+                    $_SESSION['user_id']
+                ]);
+            }
             jsonResponse(['message' => 'Template updated']);
         } else {
-            jsonResponse(['error' => 'Not found or permission denied (Cannot edit base templates)'], 403);
+            jsonResponse(['error' => 'Database error updating template or no changes made'], 500);
         }
     }
 
@@ -290,6 +308,38 @@ if ($method === 'GET') {
         $stmtLog->execute([$sessionId, 'Mestre', 'status_change', $logMsg]);
 
         jsonResponse(['message' => 'Character status updated']);
+    }
+
+    // Upload Image for Bestiary Template
+    if ($action === 'upload_adversary_image') {
+        if (!isset($_FILES['image']))
+            jsonResponse(['error' => 'No file uploaded'], 400);
+
+        // Accept 'avatar' or 'token' as image_type
+        $imageType = $_POST['image_type'] ?? 'avatar';
+        if (!in_array($imageType, ['avatar', 'token']))
+            $imageType = 'avatar';
+
+        $file = $_FILES['image'];
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, ['png', 'jpg', 'jpeg', 'webp', 'gif']))
+            jsonResponse(['error' => 'Invalid file format'], 400);
+
+        $uploadDir = __DIR__ . '/../uploads/';
+        if (!is_dir($uploadDir))
+            mkdir($uploadDir, 0777, true);
+
+        // Gerar ID seguro
+        $safeId = uniqid('adv_');
+        $filename = "{$imageType}_{$safeId}." . $ext;
+        $targetPath = $uploadDir . $filename;
+
+        if (move_uploaded_file($file['tmp_name'], $targetPath)) {
+            $url = 'uploads/' . $filename;
+            jsonResponse(['message' => ucfirst($imageType) . ' uploaded correctly', 'url' => $url]);
+        } else {
+            jsonResponse(['error' => 'Failed to save file'], 500);
+        }
     }
 }
 

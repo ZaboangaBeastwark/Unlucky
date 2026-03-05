@@ -57,6 +57,7 @@ function startLogPolling(sessionId) {
             const res = await apiCall(`logs.php?session_id=${sessionId}&last_id=${lastLogId}`);
             if (res.logs && res.logs.length > 0) {
                 const container = document.getElementById('log-entries');
+                if (!container) return; // Prevent error if panel is not in DOM or view changed
                 res.logs.forEach(log => {
                     lastLogId = Math.max(lastLogId, log.id);
                     const div = document.createElement('div');

@@ -29,7 +29,25 @@ try {
 function jsonResponse($data, $status = 200)
 {
     header('Content-Type: application/json');
+
+    // Add JSON_PARTIAL_OUTPUT_ON_ERROR to prevent complete failure
+    $flags = 0;
+    if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+        $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+    }
+    if (defined('JSON_PARTIAL_OUTPUT_ON_ERROR')) {
+        $flags |= JSON_PARTIAL_OUTPUT_ON_ERROR;
+    }
+
+    $json = json_encode($data, $flags);
+
+    if ($json === false) {
+        http_response_code(500);
+        echo json_encode(['error' => 'JSON Encode Error: ' . json_last_error_msg()]);
+        exit;
+    }
+
     http_response_code($status);
-    echo json_encode($data);
+    echo $json;
     exit;
 }
