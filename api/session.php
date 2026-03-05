@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // api/session.php
 
 // Ensure session cookie is accessible throughout the entire domain

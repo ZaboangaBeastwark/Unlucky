@@ -1,4 +1,4 @@
-﻿// js/gm.js
+// js/gm.js
 
 let gmState = {
     session: null,
@@ -29,13 +29,14 @@ async function initGmView() {
 
         gmState.equipment = eqRes.equipment || [];
 
-        if (res.session || (res.all_sessions && res.all_sessions.length > 0)) {
+        gmState.all_sessions = res.all_sessions || [];
+        gmState.characters = res.characters || [];
+        gmState.adversaries = res.adversaries || [];
+        gmState.bestiary = res.bestiary || [];
+        gmState.encounter_groups = res.encounter_groups || [];
+
+        if (res.session) {
             gmState.session = res.session;
-            gmState.all_sessions = res.all_sessions || [];
-            gmState.characters = res.characters || [];
-            gmState.adversaries = res.adversaries || [];
-            gmState.bestiary = res.bestiary || [];
-            gmState.encounter_groups = res.encounter_groups || [];
             renderGmDashboard(container);
             startGmPolling(); // Initialize auto-sync
 
@@ -52,11 +53,8 @@ async function initGmView() {
                 }
             }
         } else {
-            console.warn("Mestre sem sessão. Retorno da API:", res);
+            console.warn("Mestre sem sessão ativa. Mostrando seletor.");
             renderCreateSession(container);
-            if (res.debug_user) {
-                container.innerHTML += `<p style="color:red">Debug UserID do PHP: ${res.debug_user}</p>`;
-            }
         }
     } catch (e) {
         container.innerHTML = `<div class="error-msg">Erro do Mestre: ${e.message}</div>`;
@@ -143,14 +141,32 @@ function startGmPolling() {
 }
 
 function renderCreateSession(container) {
+    let existingHtml = '';
+    if (gmState.all_sessions && gmState.all_sessions.length > 0) {
+        existingHtml = `
+            <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                <p style="color:var(--accent-gold); font-weight:bold; margin-bottom:1rem;">Ou continue uma campanha existente:</p>
+                <div style="display:grid; gap:0.8rem;">
+                    ${gmState.all_sessions.map(s => `
+                        <button class="btn btn-outline" style="text-align:left; justify-content:space-between; display:flex; padding:0.8rem 1.2rem; border-color:rgba(255,255,255,0.2);" onclick="changeActiveSession(${s.id})">
+                            <span><i class="fas fa-book" style="color:var(--accent-purple); margin-right:8px;"></i> ${s.name || '(Sem nome)'}</span>
+                            <i class="fas fa-arrow-right" style="font-size:0.8rem; opacity:0.5;"></i>
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
     container.innerHTML = `
         <div class="glass-panel" style="padding: 2rem; max-width: 500px; margin: 0 auto; text-align:center;">
-            <h3 style="color:var(--accent-purple); margin-bottom:1rem;">Nenhuma Sessão Ativa</h3>
-            <p style="color:var(--text-muted); margin-bottom:2rem;">Crie uma nova sessão para começar a mestrar.</p>
-            <div class="input-group">
+            <h3 style="color:var(--accent-purple); margin-bottom:1rem;">Painel do Mestre</h3>
+            <p style="color:var(--text-muted); margin-bottom:1.5rem;">Crie uma nova sessão para começar a mestrar.</p>
+            <div class="input-group" style="margin-bottom:1rem;">
                 <input type="text" id="gm-session-name" placeholder="Nome da Campanha (Ex: A Queda de Sabre)">
             </div>
-            <button class="btn btn-primary w-100" onclick="createGmSession()">Iniciar Sessão</button>
+            <button class="btn btn-primary w-100" onclick="createGmSession()">Iniciar Nova Sessão</button>
+            ${existingHtml}
         </div>
     `;
 }

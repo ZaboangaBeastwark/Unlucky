@@ -1,0 +1,47 @@
+﻿{
+    "sessions": [
+        {
+            "id": 1,
+            "name": "A Centelha ",
+            "gm_id": 2,
+            "created_at": "2026-02-27 17:37:48"
+        },
+        {
+            "id": 2,
+            "name": "A Centelha",
+            "gm_id": 2,
+            "created_at": "2026-03-04 22:59:14"
+        },
+        {
+            "id": 3,
+            "name": "",
+            "gm_id": 2,
+            "created_at": "2026-03-05 13:07:49"
+        },
+        {
+            "id": 4,
+            "name": "A Centelha",
+            "gm_id": 2,
+            "created_at": "2026-03-05 13:07:55"
+        },
+        {
+            "id": 5,
+            "name": "A Centelha",
+            "gm_id": 2,
+            "created_at": "2026-03-05 13:07:59"
+        }
+    ],
+    "gms": [
+        {
+            "id": 2,
+            "username": "Zaboanga"
+        }
+    ],
+    "logs": [
+        {
+            "session_id": 2,
+            "actor_name": "Mestre",
+            "c": 14
+        }
+    ]
+}
