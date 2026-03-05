@@ -29,10 +29,11 @@ async function initGmView() {
 
         gmState.equipment = eqRes.equipment || [];
 
-        if (res.session) {
+        if (res.session || (res.all_sessions && res.all_sessions.length > 0)) {
             gmState.session = res.session;
-            gmState.characters = res.characters;
-            gmState.adversaries = res.adversaries;
+            gmState.all_sessions = res.all_sessions || [];
+            gmState.characters = res.characters || [];
+            gmState.adversaries = res.adversaries || [];
             gmState.bestiary = res.bestiary || [];
             gmState.encounter_groups = res.encounter_groups || [];
             renderGmDashboard(container);
@@ -102,6 +103,13 @@ function startGmPolling() {
                 const e2 = JSON.stringify(data.encounter_groups || []);
                 if (e1 !== e2) {
                     gmState.encounter_groups = data.encounter_groups || [];
+                    needsRender = true;
+                }
+
+                const all1 = JSON.stringify(gmState.all_sessions);
+                const all2 = JSON.stringify(data.all_sessions || []);
+                if (all1 !== all2) {
+                    gmState.all_sessions = data.all_sessions || [];
                     needsRender = true;
                 }
 
@@ -185,6 +193,13 @@ function renderGmDashboard(container) {
 
 function renderGmSessionTab(container) {
     const s = gmState.session;
+
+    if (!s) {
+        // If there's truly no active session but there are sessions, this shouldn't happen with the new backend logic.
+        // But if it does, show create session screen.
+        container.innerHTML = '<div style="text-align:center; padding: 2rem;"><h3>Nenhuma Sessão Ativa</h3><button class="btn btn-primary" onclick="initGmView()">Recarregar</button></div>';
+        return;
+    }
 
     const activeChars = gmState.characters.filter(c => ['approved', 'suspended', 'deceased'].includes(c.session_status));
     const pendingChars = gmState.characters.filter(c => c.session_status === 'pending');
@@ -398,6 +413,24 @@ function renderGmSessionTab(container) {
 
     startLogPolling(s.id);
 }
+
+window.changeActiveSession = async function (sessionId) {
+    if (!sessionId) return;
+    try {
+        await apiCall('gm.php?action=set_active_session', 'POST', { session_id: sessionId });
+        initGmView();
+    } catch (e) {
+        alert("Erro ao alterar sessão: " + e.message);
+    }
+};
+
+window.showGmCreateSessionModal = function () {
+    const name = prompt("Nome da Nova Sessão/Campanha:");
+    if (name) {
+        document.getElementById('gm-session-name').value = name;
+        createGmSession();
+    }
+};
 
 // GM Actions
 async function updateFear(sessionId, amount) {

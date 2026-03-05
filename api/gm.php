@@ -17,13 +17,47 @@ $action = $_GET['action'] ?? '';
 
 if ($method === 'GET') {
     if ($action === 'session_data_live') {
-        // Get active session
-        $stmt = $pdo->prepare('SELECT * FROM sessions WHERE gm_id = ? ORDER BY id DESC LIMIT 1');
-        $stmt->execute([$_SESSION['user_id']]);
-        $session = $stmt->fetch();
+        // Find which session is currently active for this GM
+        $stmtActive = $pdo->prepare('SELECT active_session_id FROM users WHERE id = ?');
+        $stmtActive->execute([$_SESSION['user_id']]);
+        $active_session_id = $stmtActive->fetchColumn();
+
+        // Get all sessions for this GM (to populate the dropdown)
+        $stmtAll = $pdo->prepare('SELECT id, name FROM sessions WHERE gm_id = ? ORDER BY id DESC');
+        $stmtAll->execute([$_SESSION['user_id']]);
+        $all_sessions = $stmtAll->fetchAll(PDO::FETCH_ASSOC);
+
+        if (count($all_sessions) === 0) {
+            jsonResponse(['session' => null, 'all_sessions' => []]);
+        }
+
+        // If no active session is set, default to the most recent one
+        if (!$active_session_id) {
+            $active_session_id = $all_sessions[0]['id'];
+            $pdo->prepare('UPDATE users SET active_session_id = ? WHERE id = ?')->execute([$active_session_id, $_SESSION['user_id']]);
+        } else {
+            // Verify if active session still exists
+            $exists = false;
+            foreach ($all_sessions as $s) {
+                if ($s['id'] == $active_session_id) {
+                    $exists = true;
+                    break;
+                }
+            }
+            if (!$exists) {
+                $active_session_id = $all_sessions[0]['id'];
+                $pdo->prepare('UPDATE users SET active_session_id = ? WHERE id = ?')->execute([$active_session_id, $_SESSION['user_id']]);
+            }
+        }
+
+        // Load the active session data
+        $stmt = $pdo->prepare('SELECT * FROM sessions WHERE id = ? AND gm_id = ?');
+        $stmt->execute([$active_session_id, $_SESSION['user_id']]);
+        $session = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$session) {
-            jsonResponse(['session' => null, 'debug_user' => $_SESSION['user_id'] ?? 'NONE']);
+            // Failsafe
+            jsonResponse(['session' => null, 'all_sessions' => $all_sessions]);
         }
 
         // Get characters in this session
@@ -64,6 +98,7 @@ if ($method === 'GET') {
 
         jsonResponse([
             'session' => $session,
+            'all_sessions' => $all_sessions,
             'characters' => $characters,
             'adversaries' => $adversaries,
             'bestiary' => $bestiary,
@@ -78,7 +113,19 @@ if ($method === 'GET') {
         $name = $input['name'] ?? 'Nova Sessão';
         $stmt = $pdo->prepare('INSERT INTO sessions (gm_id, name, fear_tokens) VALUES (?, ?, 0)');
         $stmt->execute([$_SESSION['user_id'], $name]);
-        jsonResponse(['message' => 'Session created', 'id' => $pdo->lastInsertId()]);
+        $new_id = $pdo->lastInsertId();
+
+        // Auto-set as active
+        $pdo->prepare('UPDATE users SET active_session_id = ? WHERE id = ?')->execute([$new_id, $_SESSION['user_id']]);
+
+        jsonResponse(['message' => 'Session created', 'id' => $new_id]);
+    }
+
+    // Set Active Session explicitly
+    if ($action === 'set_active_session') {
+        $session_id = $input['session_id'];
+        $pdo->prepare('UPDATE users SET active_session_id = ? WHERE id = ?')->execute([$session_id, $_SESSION['user_id']]);
+        jsonResponse(['message' => 'Active session changed']);
     }
 
     // Fear Economy
