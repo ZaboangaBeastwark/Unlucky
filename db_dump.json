@@ -1,86 +1,47 @@
 {
-    "users": [
-        {
-            "id": 1,
-            "username": "gabriel",
-            "role": "player"
-        },
-        {
-            "id": 2,
-            "username": "Zaboanga",
-            "role": "gm"
-        },
-        {
-            "id": 3,
-            "username": "elvisther_cs@hotmail.com",
-            "role": "player"
-        },
-        {
-            "id": 4,
-            "username": "magomagal",
-            "role": "player"
-        },
-        {
-            "id": 5,
-            "username": "danilocruz",
-            "role": "player"
-        },
-        {
-            "id": 6,
-            "username": "Victo belini",
-            "role": "player"
-        },
-        {
-            "id": 7,
-            "username": "bigjota",
-            "role": "player"
-        },
-        {
-            "id": 8,
-            "username": "BiigJota",
-            "role": "player"
-        },
-        {
-            "id": 9,
-            "username": "danilog",
-            "role": "player"
-        },
-        {
-            "id": 10,
-            "username": "Melvin",
-            "role": "player"
-        },
-        {
-            "id": 11,
-            "username": "Primo",
-            "role": "player"
-        },
-        {
-            "id": 12,
-            "username": "Fernanda",
-            "role": "player"
-        },
-        {
-            "id": 13,
-            "username": "UsuariodoMauricio",
-            "role": "player"
-        },
-        {
-            "id": 14,
-            "username": "ikingl",
-            "role": "player"
-        },
-        {
-            "id": 15,
-            "username": "marcranger",
-            "role": "player"
-        }
-    ],
     "sessions": [
         {
             "id": 1,
+            "name": "A Centelha ",
             "gm_id": 2,
-            "name": "A Centelha "
+            "created_at": "2026-02-27 17:37:48"
+        },
+        {
+            "id": 2,
+            "name": "A Centelha",
+            "gm_id": 2,
+            "created_at": "2026-03-04 22:59:14"
+        },
+        {
+            "id": 3,
+            "name": "",
+            "gm_id": 2,
+            "created_at": "2026-03-05 13:07:49"
+        },
+        {
+            "id": 4,
+            "name": "A Centelha",
+            "gm_id": 2,
+            "created_at": "2026-03-05 13:07:55"
+        },
+        {
+            "id": 5,
+            "name": "A Centelha",
+            "gm_id": 2,
+            "created_at": "2026-03-05 13:07:59"
+        }
+    ],
+    "gms": [
+        {
+            "id": 2,
+            "username": "Zaboanga"
+        }
+    ],
+    "logs": [
+        {
+            "session_id": 2,
+            "actor_name": "Mestre",
+            "c": 14
         }
     ]
 }

@@ -29,12 +29,14 @@ async function initGmView() {
 
         gmState.equipment = eqRes.equipment || [];
 
+        gmState.all_sessions = res.all_sessions || [];
+        gmState.characters = res.characters || [];
+        gmState.adversaries = res.adversaries || [];
+        gmState.bestiary = res.bestiary || [];
+        gmState.encounter_groups = res.encounter_groups || [];
+
         if (res.session) {
             gmState.session = res.session;
-            gmState.characters = res.characters;
-            gmState.adversaries = res.adversaries;
-            gmState.bestiary = res.bestiary || [];
-            gmState.encounter_groups = res.encounter_groups || [];
             renderGmDashboard(container);
             startGmPolling(); // Initialize auto-sync
 
@@ -51,7 +53,7 @@ async function initGmView() {
                 }
             }
         } else {
-            console.warn("Mestre sem sessão. Retorno da API:", res);
+            console.warn("Mestre sem sessão ativa. Mostrando seletor.");
             renderCreateSession(container);
             if (res.debug_user) {
                 container.innerHTML += `<p style="color:red">Debug UserID do PHP: ${res.debug_user}</p>`;
@@ -105,6 +107,13 @@ function startGmPolling() {
                     needsRender = true;
                 }
 
+                const all1 = JSON.stringify(gmState.all_sessions);
+                const all2 = JSON.stringify(data.all_sessions || []);
+                if (all1 !== all2) {
+                    gmState.all_sessions = data.all_sessions || [];
+                    needsRender = true;
+                }
+
                 if (needsRender) {
                     const scrollY = window.scrollY;
                     const scrollX = window.scrollX;
@@ -135,14 +144,32 @@ function startGmPolling() {
 }
 
 function renderCreateSession(container) {
+    let existingHtml = '';
+    if (gmState.all_sessions && gmState.all_sessions.length > 0) {
+        existingHtml = `
+            <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                <p style="color:var(--accent-gold); font-weight:bold; margin-bottom:1rem;">Ou continue uma campanha existente:</p>
+                <div style="display:grid; gap:0.8rem;">
+                    ${gmState.all_sessions.map(s => `
+                        <button class="btn btn-outline" style="text-align:left; justify-content:space-between; display:flex; padding:0.8rem 1.2rem; border-color:rgba(255,255,255,0.2);" onclick="changeActiveSession(${s.id})">
+                            <span><i class="fas fa-book" style="color:var(--accent-purple); margin-right:8px;"></i> ${s.name || '(Sem nome)'}</span>
+                            <i class="fas fa-arrow-right" style="font-size:0.8rem; opacity:0.5;"></i>
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
     container.innerHTML = `
         <div class="glass-panel" style="padding: 2rem; max-width: 500px; margin: 0 auto; text-align:center;">
-            <h3 style="color:var(--accent-purple); margin-bottom:1rem;">Nenhuma Sessão Ativa</h3>
-            <p style="color:var(--text-muted); margin-bottom:2rem;">Crie uma nova sessão para começar a mestrar.</p>
-            <div class="input-group">
+            <h3 style="color:var(--accent-purple); margin-bottom:1rem;">Painel do Mestre</h3>
+            <p style="color:var(--text-muted); margin-bottom:1.5rem;">Crie uma nova sessão para começar a mestrar.</p>
+            <div class="input-group" style="margin-bottom:1rem;">
                 <input type="text" id="gm-session-name" placeholder="Nome da Campanha (Ex: A Queda de Sabre)">
             </div>
-            <button class="btn btn-primary w-100" onclick="createGmSession()">Iniciar Sessão</button>
+            <button class="btn btn-primary w-100" onclick="createGmSession()">Iniciar Nova Sessão</button>
+            ${existingHtml}
         </div>
     `;
 }
@@ -185,6 +212,13 @@ function renderGmDashboard(container) {
 
 function renderGmSessionTab(container) {
     const s = gmState.session;
+
+    if (!s) {
+        // If there's truly no active session but there are sessions, this shouldn't happen with the new backend logic.
+        // But if it does, show create session screen.
+        container.innerHTML = '<div style="text-align:center; padding: 2rem;"><h3>Nenhuma Sessão Ativa</h3><button class="btn btn-primary" onclick="initGmView()">Recarregar</button></div>';
+        return;
+    }
 
     const activeChars = gmState.characters.filter(c => ['approved', 'suspended', 'deceased'].includes(c.session_status));
     const pendingChars = gmState.characters.filter(c => c.session_status === 'pending');
@@ -398,6 +432,24 @@ function renderGmSessionTab(container) {
 
     startLogPolling(s.id);
 }
+
+window.changeActiveSession = async function (sessionId) {
+    if (!sessionId) return;
+    try {
+        await apiCall('gm.php?action=set_active_session', 'POST', { session_id: sessionId });
+        initGmView();
+    } catch (e) {
+        alert("Erro ao alterar sessão: " + e.message);
+    }
+};
+
+window.showGmCreateSessionModal = function () {
+    const name = prompt("Nome da Nova Sessão/Campanha:");
+    if (name) {
+        document.getElementById('gm-session-name').value = name;
+        createGmSession();
+    }
+};
 
 // GM Actions
 async function updateFear(sessionId, amount) {
@@ -1342,3 +1394,4 @@ window.deleteEncounter = deleteEncounter;
 window.openAddAdvPicker = openAddAdvPicker;
 window.addAdversaryFromTemplate = addAdversaryFromTemplate;
 window.openBestiaryModalFromTemplate = openBestiaryModalFromTemplate;
+
