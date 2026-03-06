@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auditoria da Campanha - Daggerheart</title>
+    <!-- Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lora:ital,wght@0,400;0,700;1,400&family=Bebas+Neue&family=Baskervville:ital@0;1&family=Inter:wght@300;400;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .audit-container {
+            max-width: 1000px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .audit-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .audit-filters {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .audit-filters .form-group {
+            margin-bottom: 0;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .audit-log-item {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+            transition: background 0.2s;
+        }
+
+        .audit-log-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .audit-log-item .log-icon {
+            font-size: 1.5rem;
+            color: var(--accent-gold);
+            padding-top: 5px;
+            flex-shrink: 0;
+            width: 30px;
+            text-align: center;
+        }
+
+        .audit-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 0.3rem;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .audit-desc {
+            font-size: 0.95rem;
+            color: white;
+            line-height: 1.4;
+        }
+
+        .badge {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .badge-mestre {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .badge-jogador {
+            background: #3498db;
+            color: white;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 2rem;
+        }
+
+        .pagination button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background: var(--accent-gold);
+            color: black;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination .active {
+            background: var(--accent-gold);
+            color: black;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body class="theme-dark">
+    <!-- Header -->
+    <header class="app-header" style="justify-content: space-between; padding: 1rem 2rem;">
+        <div class="logo-area" style="cursor:pointer;" onclick="window.location.href = 'index.html'">
+            <h1 style="font-size: 1.5rem; display:flex; align-items:center; gap:10px;">
+                <i class="fas fa-arrow-left" style="color:var(--accent-gold)"></i>
+                DAGGERHEART
+            </h1>
+        </div>
+        <div class="user-info" style="display: flex; gap: 1rem; align-items: center;">
+            <div id="log-session-name"
+                style="color:var(--accent-gold); font-family: 'Cinzel', serif; font-size: 1.2rem;">Carregando...</div>
+            <div id="log-user-name" style="color: white; font-weight: 600;"></div>
+        </div>
+    </header>
+
+    <main class="audit-container">
+        <div class="audit-header">
+            <h2 style="font-family:'Cinzel', serif; font-size:2rem; color:var(--accent-gold); margin:0;">
+                <i class="fas fa-history"></i> Log de Auditoria
+            </h2>
+            <button class="btn btn-primary btn-sm" onclick="window.location.reload()"><i class="fas fa-sync"></i>
+                Atualizar</button>
+        </div>
+
+        <div class="audit-filters glass-panel">
+            <div class="form-group">
+                <div class="input-icon-wrapper">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="filter-search" class="form-control"
+                        placeholder="Buscar texto, jogador ou personagem..." onkeyup="debounceFilter()">
+                </div>
+            </div>
+            <div class="form-group" style="flex:0.5;">
+                <div class="input-icon-wrapper">
+                    <i class="fas fa-tag"></i>
+                    <select id="filter-type" class="form-control" onchange="applyFilters()">
+                        <option value="">Todas as Ações</option>
+                        <option value="Recurso: PV">Pontos de Vida</option>
+                        <option value="Recurso: Estresse">Fadiga (Stress)</option>
+                        <option value="Recurso: Esperança">Esperança</option>
+                        <option value="Recurso: Experiência">Experiência (XP)</option>
+                        <option value="Recurso: Slots de Armadura">Slots de Armadura</option>
+                        <option value="Recurso: Armação Base (Override)">Armadura</option>
+                        <option value="Recurso: Evasão (Override)">Evasão</option>
+                        <option value="Ouro">Ouro</option>
+                        <option value="Atributos">Atributos</option>
+                        <option value="Inventário">Inventário / Equipamentos</option>
+                        <option value="Criação de Personagem">Criação de Personagem</option>
+                        <option value="status_change">Ações do Mestre</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group" style="flex:0.5;">
+                <div class="input-icon-wrapper">
+                    <i class="fas fa-user-tag"></i>
+                    <select id="filter-role" class="form-control" onchange="applyFilters()">
+                        <option value="">Todos os Usuários</option>
+                        <option value="gm">Mestre</option>
+                        <option value="jogador">Jogador</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div id="audit-list">
+            <!-- Logs dynamically inserted here -->
+            <div style="text-align:center; padding: 2rem; color:var(--text-muted);">
+                <i class="fas fa-spinner fa-spin" style="font-size:2rem; margin-bottom:1rem;"></i><br>
+                Carregando histórico...
+            </div>
+        </div>
+
+        <div id="audit-pagination" class="pagination" style="display:none;">
+            <!-- Pagination buttons -->
+        </div>
+
+    </main>
+
+    <script src="js/api.js"></script>
+    <script src="js/audit.js"></script>
+</body>
+
+</html>

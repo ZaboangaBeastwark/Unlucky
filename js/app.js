@@ -48,8 +48,10 @@ let lastLogId = 0;
 
 function startLogPolling(sessionId) {
     if (logInterval) clearInterval(logInterval);
-    document.getElementById('action-log-panel').style.display = 'flex';
-    document.getElementById('log-entries').innerHTML = '';
+    const panel = document.getElementById('action-log-panel');
+    const logEntries = document.getElementById('log-entries');
+    if (panel) panel.style.display = 'flex';
+    if (logEntries) logEntries.innerHTML = '';
     lastLogId = 0;
 
     const poll = async () => {

@@ -17,7 +17,7 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $method = $_SERVER['REQUEST_METHOD'];
-$action = $_GET['action'] ?? '';
+$action = $_REQUEST['action'] ?? '';
 
 if ($method === 'GET') {
     if ($action === 'mine') {
@@ -105,7 +105,25 @@ if ($method === 'GET') {
                 $roleplayJson,
                 $secretNote
             ]);
-            jsonResponse(['message' => 'Character created successfully', 'id' => $pdo->lastInsertId()]);
+            $newCharId = $pdo->lastInsertId();
+            $charName = $input['name'] ?? 'Sem Nome';
+            $charClass = ($input['class'] ?? 'Guerreiro') . ' - ' . ($input['subclass'] ?? '');
+
+            // Busca a sessão ativa do jogador para logar (se existir)
+            $stmtSess = $pdo->prepare('SELECT active_session_id FROM users WHERE id = ?');
+            $stmtSess->execute([$_SESSION['user_id']]);
+            $activeSessId = $stmtSess->fetchColumn();
+
+            logAudit(
+                $pdo,
+                $activeSessId,
+                $newCharId,
+                $charName,
+                'Criação de Personagem',
+                "O jogador criou o personagem <b>{$charName}</b> ({$charClass}), Nível 1, com {$hpBase} PV base e Evasão {$evasionBase}."
+            );
+
+            jsonResponse(['message' => 'Character created successfully', 'id' => $newCharId]);
         } catch (Exception $e) {
             jsonResponse(['error' => 'Failed to create character: ' . $e->getMessage()], 500);
         }
@@ -123,8 +141,8 @@ if ($method === 'GET') {
 
         $allowedFields = ['hp_current', 'stress_current', 'hope_current', 'evasion_current_override', 'armor_slots', 'armor_base_override', 'xp'];
         if (in_array($field, $allowedFields)) {
-            // Fetch current to increment/decrement safely, alongside base stats to calculate overrides from the correct baseline
-            $stmt = $pdo->prepare("SELECT {$field}, evasion_base, armor_base FROM characters WHERE id = ?");
+            // Fetch current to increment/decrement safely, alongside base stats and session ID for audit log
+            $stmt = $pdo->prepare("SELECT session_id, name, {$field}, evasion_base, armor_base FROM characters WHERE id = ?");
             $stmt->execute([$charId]);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -157,24 +175,51 @@ if ($method === 'GET') {
 
             $updateStmt = $pdo->prepare("UPDATE characters SET {$field} = ? WHERE id = ?");
             $updateStmt->execute([$newVal, $charId]);
+            // Log the action
+            $actionNames = [
+                'hp_current' => 'PV',
+                'stress_current' => 'Estresse',
+                'hope_current' => 'Esperança',
+                'evasion_current_override' => 'Evasão (Override)',
+                'armor_slots' => 'Slots de Armadura',
+                'armor_base_override' => 'Armadura Base (Override)',
+                'xp' => 'Experiência'
+            ];
+            $friendlyName = $actionNames[$field] ?? $field;
+            $diffText = $newVal > $currentVal ? "aumentou" : "reduziu";
+            if ($newVal != $currentVal) {
+                $desc = "{$diffText} {$friendlyName} de {$currentVal} para {$newVal}.";
+                $type = "Recurso: {$friendlyName}";
+                logAudit($pdo, $row['session_id'], $charId, $row['name'], $type, $desc);
+            }
+
             jsonResponse(['message' => 'Updated successfully', 'new_value' => $newVal]);
         }
 
         // Special handle for JSON Gold Update
         if ($field === 'gold') {
-            $stmt = $pdo->prepare("SELECT inventory FROM characters WHERE id = ?");
+            $stmt = $pdo->prepare("SELECT session_id, name, inventory FROM characters WHERE id = ?");
             $stmt->execute([$charId]);
-            $invStr = $stmt->fetchColumn();
-            $inv = json_decode($invStr, true);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            $inv = json_decode($row['inventory'], true);
             if (!isset($inv['gold']))
                 $inv['gold'] = 0;
 
+            $oldGold = $inv['gold'];
             $inv['gold'] += (int) $value;
             if ($inv['gold'] < 0)
                 $inv['gold'] = 0;
 
             $uStmt = $pdo->prepare("UPDATE characters SET inventory = ? WHERE id = ?");
             $uStmt->execute([json_encode($inv), $charId]);
+
+            // Log Gold
+            if ($oldGold != $inv['gold']) {
+                $diffText = $inv['gold'] > $oldGold ? "ganhou" : "gastou";
+                $desc = "O personagem {$diffText} ouro (De {$oldGold} para {$inv['gold']}).";
+                logAudit($pdo, $row['session_id'], $charId, $row['name'], "Ouro", $desc);
+            }
+
             jsonResponse(['message' => 'Gold updated successfully', 'new_value' => $inv['gold']]);
         }
 
@@ -236,6 +281,12 @@ if ($method === 'GET') {
         $updateStmt = $pdo->prepare('UPDATE characters SET inventory = ? WHERE id = ?');
         $updateStmt->execute([$invJson, $charId]);
 
+        // Audit Log for full inventory updates
+        $stmtName = $pdo->prepare("SELECT session_id, name FROM characters WHERE id = ?");
+        $stmtName->execute([$charId]);
+        $row = $stmtName->fetch(PDO::FETCH_ASSOC);
+        logAudit($pdo, $row['session_id'], $charId, $row['name'], "Inventário", "O inventário do personagem foi reorganizado ou modificado.");
+
         jsonResponse(['message' => 'Inventário atualizado com sucesso.']);
 
     } elseif ($action === 'update_attributes') {
@@ -256,6 +307,12 @@ if ($method === 'GET') {
         $attrJson = json_encode($attributes);
         $updateStmt = $pdo->prepare('UPDATE characters SET attributes = ? WHERE id = ?');
         $updateStmt->execute([$attrJson, $charId]);
+
+        // Audit log for attributes
+        $stmtName = $pdo->prepare("SELECT session_id, name FROM characters WHERE id = ?");
+        $stmtName->execute([$charId]);
+        $row = $stmtName->fetch(PDO::FETCH_ASSOC);
+        logAudit($pdo, $row['session_id'], $charId, $row['name'], "Atributos", "Os atributos primários do personagem foram subscritos ou atualizados.");
 
         jsonResponse(['message' => 'Atributos atualizados com sucesso.']);
 

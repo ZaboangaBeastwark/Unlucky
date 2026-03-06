@@ -13,97 +13,148 @@ if (isset($_SESSION['user_id'])) {
 requireGM();
 
 $method = $_SERVER['REQUEST_METHOD'];
-$action = $_GET['action'] ?? '';
+$action = $_REQUEST['action'] ?? '';
 
 if ($method === 'GET') {
     if ($action === 'session_data_live') {
-        // Find which session is currently active for this GM
-        $stmtActive = $pdo->prepare('SELECT active_session_id FROM users WHERE id = ?');
-        $stmtActive->execute([$_SESSION['user_id']]);
-        $active_session_id = $stmtActive->fetchColumn();
+        try {
+            // For GM, fetch all sessions and active session
+            $stmtActive = $pdo->prepare('SELECT active_session_id FROM users WHERE id = ?');
+            $stmtActive->execute([$_SESSION['user_id']]);
+            $active_session_id = $stmtActive->fetchColumn();
 
-        // Get all sessions for this GM (to populate the dropdown)
-        $stmtAll = $pdo->prepare('SELECT id, name FROM sessions WHERE gm_id = ? ORDER BY id DESC');
-        $stmtAll->execute([$_SESSION['user_id']]);
-        $all_sessions = $stmtAll->fetchAll(PDO::FETCH_ASSOC);
+            // Get all sessions for this GM (to populate the dropdown)
+            $stmtAll = $pdo->prepare('SELECT id, name FROM sessions WHERE gm_id = ? ORDER BY id DESC');
+            $stmtAll->execute([$_SESSION['user_id']]);
+            $all_sessions = $stmtAll->fetchAll(PDO::FETCH_ASSOC);
 
-        if (count($all_sessions) === 0) {
-            jsonResponse(['session' => null, 'all_sessions' => []]);
-        }
+            // PERSISTENT DEBUG LOGGING FOR TROUBLESHOOTING
+            $debug_log = [
+                'timestamp' => date('Y-m-d H:i:s'),
+                'user_id' => $_SESSION['user_id'],
+                'username' => $_SESSION['username'] ?? 'unknown',
+                'session_count' => count($all_sessions),
+                'debug_user' => $_SESSION['user_id'] ?? 'none'
+            ];
+            file_put_contents(__DIR__ . '/debug_gm_v2.log', json_encode($debug_log) . PHP_EOL, FILE_APPEND);
 
-        // If no active session is set, default to the most recent one
-        if (!$active_session_id) {
-            $active_session_id = $all_sessions[0]['id'];
-            $pdo->prepare('UPDATE users SET active_session_id = ? WHERE id = ?')->execute([$active_session_id, $_SESSION['user_id']]);
-        } else {
-            // Verify if active session still exists
-            $exists = false;
-            foreach ($all_sessions as $s) {
-                if ($s['id'] == $active_session_id) {
-                    $exists = true;
-                    break;
-                }
+            if (count($all_sessions) === 0) {
+                jsonResponse(['session' => null, 'all_sessions' => []]);
             }
-            if (!$exists) {
+
+            // If no active session is set, default to the most recent one
+            if (!$active_session_id) {
                 $active_session_id = $all_sessions[0]['id'];
                 $pdo->prepare('UPDATE users SET active_session_id = ? WHERE id = ?')->execute([$active_session_id, $_SESSION['user_id']]);
+            } else {
+                // Verify if active session still exists
+                $exists = false;
+                foreach ($all_sessions as $s) {
+                    if ($s['id'] == $active_session_id) {
+                        $exists = true;
+                        break;
+                    }
+                }
+                if (!$exists) {
+                    $active_session_id = $all_sessions[0]['id'];
+                    $pdo->prepare('UPDATE users SET active_session_id = ? WHERE id = ?')->execute([$active_session_id, $_SESSION['user_id']]);
+                }
             }
+
+            // Load the active session data
+            $stmt = $pdo->prepare('SELECT * FROM sessions WHERE id = ? AND gm_id = ?');
+            $stmt->execute([$active_session_id, $_SESSION['user_id']]);
+            $session = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$session) {
+                // Failsafe
+                jsonResponse(['session' => null, 'all_sessions' => $all_sessions]);
+            }
+
+            // Get characters in this session
+            $stmtChar = $pdo->prepare('SELECT c.*, u.username as player_name FROM characters c LEFT JOIN users u ON c.user_id = u.id WHERE c.session_id = ?');
+            $stmtChar->execute([$session['id']]);
+            $characters = $stmtChar->fetchAll(PDO::FETCH_ASSOC);
+
+            // Decode JSON fields for each character so the frontend receives them properly
+            foreach ($characters as &$char) {
+                $char['attributes'] = json_decode($char['attributes'] ?? '{}', true);
+                $char['inventory'] = json_decode($char['inventory'] ?? '{"equipped":[],"bag":[],"gold":0}', true);
+                $char['experiences'] = json_decode($char['experiences'] ?? '[]', true);
+                $char['cards'] = json_decode($char['cards'] ?? '[]', true);
+                $char['roleplay_answers'] = json_decode($char['roleplay_answers'] ?? '[]', true);
+            }
+
+            // Get adversaries (vivos na cena)
+            $stmtAdv = $pdo->prepare('SELECT * FROM adversaries WHERE session_id = ?');
+            $stmtAdv->execute([$session['id']]);
+            $adversaries = $stmtAdv->fetchAll();
+
+            // Get Bestiary Templates (do Mestre atual ou Geração do Sistema - gm_id IS NULL)
+            $stmtTpl = $pdo->prepare('SELECT * FROM adversary_templates WHERE gm_id = ? OR gm_id IS NULL ORDER BY name ASC');
+            $stmtTpl->execute([$_SESSION['user_id']]);
+            $bestiary = $stmtTpl->fetchAll(PDO::FETCH_ASSOC);
+
+            // Decode JSON fields for bestiary
+            foreach ($bestiary as &$beast) {
+                $beast['attack'] = json_decode($beast['attack'] ?? '{}', true);
+                $beast['experiences'] = json_decode($beast['experiences'] ?? '[]', true);
+                $beast['abilities'] = json_decode($beast['abilities'] ?? '[]', true);
+            }
+
+            // Get Encounter Groups
+            $stmtGroups = $pdo->prepare('SELECT * FROM encounter_groups WHERE session_id = ? ORDER BY id ASC');
+            $stmtGroups->execute([$session['id']]);
+            $encounter_groups = $stmtGroups->fetchAll(PDO::FETCH_ASSOC);
+
+            // OPTIMIZATION: If the session data fails to load or encode, we still want to return the all_sessions list.
+            $responseData = [
+                'session' => $session,
+                'all_sessions' => $all_sessions,
+                'characters' => $characters,
+                'adversaries' => $adversaries,
+                'bestiary' => $bestiary,
+                'encounter_groups' => $encounter_groups
+            ];
+
+            // Custom jsonResponse logic here to catch encoding errors specifically for this big payload
+            header('Content-Type: application/json');
+            $flags = JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR;
+            $json = json_encode($responseData, $flags);
+
+            if ($json === false) {
+                // If encoding failed, try to at least send the session list which is critical
+                $fallbackData = [
+                    'session' => null,
+                    'all_sessions' => $all_sessions,
+                    'error' => 'Data too large or malformed for JSON: ' . json_last_error_msg()
+                ];
+                echo json_encode($fallbackData, $flags);
+                exit;
+            }
+
+            echo $json;
+            exit;
+
+        } catch (\Throwable $t) {
+            // CATCH SILENT CRASHES AND LOG THEM
+            $crash_log = [
+                'timestamp' => date('Y-m-d H:i:s'),
+                'error' => $t->getMessage(),
+                'file' => $t->getFile(),
+                'line' => $t->getLine()
+            ];
+            file_put_contents(__DIR__ . '/crash_report.log', json_encode($crash_log) . PHP_EOL, FILE_APPEND);
+
+            // Still try to return the sessions if it crashed halfway through
+            $safeSessions = isset($all_sessions) ? $all_sessions : [];
+            echo json_encode([
+                'session' => null,
+                'all_sessions' => $safeSessions,
+                'error' => 'Backend Logic Crash: ' . $t->getMessage()
+            ]);
+            exit;
         }
-
-        // Load the active session data
-        $stmt = $pdo->prepare('SELECT * FROM sessions WHERE id = ? AND gm_id = ?');
-        $stmt->execute([$active_session_id, $_SESSION['user_id']]);
-        $session = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$session) {
-            // Failsafe
-            jsonResponse(['session' => null, 'all_sessions' => $all_sessions]);
-        }
-
-        // Get characters in this session
-        $stmtChar = $pdo->prepare('SELECT c.*, u.username as player_name FROM characters c LEFT JOIN users u ON c.user_id = u.id WHERE c.session_id = ?');
-        $stmtChar->execute([$session['id']]);
-        $characters = $stmtChar->fetchAll(PDO::FETCH_ASSOC);
-
-        // Decode JSON fields for each character so the frontend receives them properly
-        foreach ($characters as &$char) {
-            $char['attributes'] = json_decode($char['attributes'] ?? '{}', true);
-            $char['inventory'] = json_decode($char['inventory'] ?? '{"equipped":[],"bag":[],"gold":0}', true);
-            $char['experiences'] = json_decode($char['experiences'] ?? '[]', true);
-            $char['cards'] = json_decode($char['cards'] ?? '[]', true);
-            $char['roleplay_answers'] = json_decode($char['roleplay_answers'] ?? '[]', true);
-        }
-
-        // Get adversaries (vivos na cena)
-        $stmtAdv = $pdo->prepare('SELECT * FROM adversaries WHERE session_id = ?');
-        $stmtAdv->execute([$session['id']]);
-        $adversaries = $stmtAdv->fetchAll();
-
-        // Get Bestiary Templates (do Mestre atual ou Geração do Sistema - gm_id IS NULL)
-        $stmtTpl = $pdo->prepare('SELECT * FROM adversary_templates WHERE gm_id = ? OR gm_id IS NULL ORDER BY name ASC');
-        $stmtTpl->execute([$_SESSION['user_id']]);
-        $bestiary = $stmtTpl->fetchAll(PDO::FETCH_ASSOC);
-
-        // Decode JSON fields for bestiary
-        foreach ($bestiary as &$beast) {
-            $beast['attack'] = json_decode($beast['attack'] ?? '{}', true);
-            $beast['experiences'] = json_decode($beast['experiences'] ?? '[]', true);
-            $beast['abilities'] = json_decode($beast['abilities'] ?? '[]', true);
-        }
-
-        // Get Encounter Groups
-        $stmtGroups = $pdo->prepare('SELECT * FROM encounter_groups WHERE session_id = ? ORDER BY id ASC');
-        $stmtGroups->execute([$session['id']]);
-        $encounter_groups = $stmtGroups->fetchAll(PDO::FETCH_ASSOC);
-
-        jsonResponse([
-            'session' => $session,
-            'all_sessions' => $all_sessions,
-            'characters' => $characters,
-            'adversaries' => $adversaries,
-            'bestiary' => $bestiary,
-            'encounter_groups' => $encounter_groups
-        ]);
     }
 } elseif ($method === 'POST') {
     $input = json_decode(file_get_contents('php://input'), true);
@@ -126,6 +177,37 @@ if ($method === 'GET') {
         $session_id = $input['session_id'];
         $pdo->prepare('UPDATE users SET active_session_id = ? WHERE id = ?')->execute([$session_id, $_SESSION['user_id']]);
         jsonResponse(['message' => 'Active session changed']);
+    }
+
+    // Delete Session
+    if ($action === 'delete_session') {
+        $session_id = $input['session_id'];
+
+        // Ensure the session belongs to this GM before deleting
+        $stmtCheck = $pdo->prepare('SELECT id FROM sessions WHERE id = ? AND gm_id = ?');
+        $stmtCheck->execute([$session_id, $_SESSION['user_id']]);
+        if ($stmtCheck->fetchColumn()) {
+            // Unset active session if it's the one being deleted
+            $pdo->prepare('UPDATE users SET active_session_id = NULL WHERE active_session_id = ? AND id = ?')->execute([$session_id, $_SESSION['user_id']]);
+
+            // Database should ideally have ON DELETE CASCADE. But let's delete them manually to be safe.
+            $pdo->prepare('DELETE FROM characters WHERE session_id = ?')->execute([$session_id]);
+            $pdo->prepare('DELETE FROM adversaries WHERE session_id = ?')->execute([$session_id]);
+            $pdo->prepare('DELETE FROM encounter_groups WHERE session_id = ?')->execute([$session_id]);
+            $pdo->prepare('DELETE FROM action_logs WHERE session_id = ?')->execute([$session_id]);
+
+            // Delete the session
+            $pdo->prepare('DELETE FROM sessions WHERE id = ?')->execute([$session_id]);
+            jsonResponse(['message' => 'Campanha deletada com sucesso.']);
+        } else {
+            jsonResponse(['error' => 'Campanha não encontrada ou acesso negado.'], 403);
+        }
+    }
+
+    // Unset Active Session
+    if ($action === 'unset_active_session') {
+        $pdo->prepare('UPDATE users SET active_session_id = NULL WHERE id = ?')->execute([$_SESSION['user_id']]);
+        jsonResponse(['message' => 'Active session unset']);
     }
 
     // Fear Economy

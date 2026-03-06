@@ -131,7 +131,7 @@ window.renderCharacterSelection = function (chars, container) {
 window.openCharacterSheet = function (char) {
     window.currentPlayingCharacter = char;
     const container = document.getElementById('player-dynamic-area');
-    renderCharacterSheet(char, container);
+    window.renderCharacterSheet(char, container);
 
     // Initialize real-time polling to sync with GM changes
     if (window.gmSyncInterval) clearInterval(window.gmSyncInterval);
@@ -158,7 +158,7 @@ window.openCharacterSheet = function (char) {
                         const scrollY = window.scrollY;
                         const scrollX = window.scrollX;
 
-                        renderCharacterSheet(clonedChar, cContainer);
+                        window.renderCharacterSheet(clonedChar, cContainer);
 
                         // Restore scroll position
                         window.scrollTo(scrollX, scrollY);
@@ -764,10 +764,16 @@ async function submitCharacter() {
     }
 }
 
-// ---------------------------------------------------------
-// Character Sheet Renderer (Basic override text mapping)
-// ---------------------------------------------------------
-function renderCharacterSheet(char, container) {
+window.renderCharacterSheet = function (char, container, backAction = null) {
+    // Auto-detect GM view if not explicitly provided
+    if (!backAction) {
+        if (window.appState && window.appState.user && window.appState.user.role === 'gm') {
+            backAction = 'window.viewingCharId=null; window.forceDashboard=true; if(typeof initGmView === "function") initGmView();';
+        } else {
+            backAction = 'if(typeof initPlayerView === "function") initPlayerView();';
+        }
+    }
+
     if (!char.attributes) char.attributes = {};
     if (!char.inventory) char.inventory = { equipped: [], bag: [], gold: 0 };
     if (!char.experiences) char.experiences = [];
@@ -1010,7 +1016,7 @@ function renderCharacterSheet(char, container) {
         <div class="sheet-grid">
             <div class="sheet-col">
                 <div class="glass-panel sheet-section" style="text-align: center; position:relative;">
-                    <div style="position:absolute; top:1rem; left:1rem; cursor:pointer; color:var(--text-muted); font-size:1.5rem;" onclick="initPlayerView()" title="Voltar para Seleção de Heróis">
+                    <div style="position:absolute; top:1rem; left:1rem; cursor:pointer; color:var(--text-muted); font-size:1.5rem;" onclick="${backAction}" title="Voltar">
                         <i class="fas fa-arrow-left"></i>
                     </div>
                     
@@ -1056,7 +1062,7 @@ function renderCharacterSheet(char, container) {
             <div class="sheet-col">
                 <div class="glass-panel sheet-section">
                     <h3>Recursos Combatíveis</h3>
-                    <div style="display:flex; justify-content:space-around; align-items:center; margin-bottom:1.5rem; margin-top:1rem; text-align:center;">
+                        <div style="display:flex; justify-content:space-around; align-items:center; margin-bottom:1.5rem; margin-top:1rem; text-align:center;">
                         <!-- Evasion Shield -->
                         <div style="display:flex; flex-direction:column; align-items:center;">
                             <div style="font-size:0.8rem; font-weight:bold; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.3rem;">Evasão</div>
@@ -1064,8 +1070,8 @@ function renderCharacterSheet(char, container) {
                                 <span style="font-size:2rem; font-weight:bold; color:var(--accent-gold); text-shadow: 0 0 8px rgba(241,196,15,0.5);">${char.evasion_current_override ?? char.evasion_base}</span>
                             </div>
                             <div style="margin-top:0.5rem; display:flex; gap:0.5rem;">
-                                <button class="btn btn-sm" onclick="updateResource(${char.id}, 'evasion_current_override', -1)" style="padding:0 0.5rem; font-weight:bold;">-</button>
-                                <button class="btn btn-sm" onclick="updateResource(${char.id}, 'evasion_current_override', 1)" style="padding:0 0.5rem; font-weight:bold;">+</button>
+                                <button class="btn btn-sm" onclick="window.updateResource(${char.id}, 'evasion_current_override', -1)" style="padding:0 0.5rem; font-weight:bold;">-</button>
+                                <button class="btn btn-sm" onclick="window.updateResource(${char.id}, 'evasion_current_override', 1)" style="padding:0 0.5rem; font-weight:bold;">+</button>
                             </div>
                         </div>
 
@@ -1076,8 +1082,8 @@ function renderCharacterSheet(char, container) {
                                 <span style="font-size:2rem; font-weight:bold; color:#e78c3c; text-shadow: 0 0 8px rgba(231,140,60,0.5);">${char.armor_base_override ?? char.armor_base}</span>
                             </div>
                             <div style="margin-top:0.5rem; display:flex; gap:0.5rem;">
-                                <button class="btn btn-sm" onclick="updateResource(${char.id}, 'armor_base_override', -1)" style="padding:0 0.5rem; font-weight:bold;">-</button>
-                                <button class="btn btn-sm" onclick="updateResource(${char.id}, 'armor_base_override', 1)" style="padding:0 0.5rem; font-weight:bold;">+</button>
+                                <button class="btn btn-sm" onclick="window.updateResource(${char.id}, 'armor_base_override', -1)" style="padding:0 0.5rem; font-weight:bold;">-</button>
+                                <button class="btn btn-sm" onclick="window.updateResource(${char.id}, 'armor_base_override', 1)" style="padding:0 0.5rem; font-weight:bold;">+</button>
                             </div>
                         </div>
                     </div>
@@ -1085,9 +1091,9 @@ function renderCharacterSheet(char, container) {
                     <div class="resource-row">
                         <span>Slots de Armadura Usados</span>
                         <span style="display:flex; align-items:center; gap:0.5rem;">
-                            <button class="btn btn-sm" onclick="updateResource(${char.id}, 'armor_slots', -1)" style="padding:0 0.4rem; font-size:0.8rem">-</button>
+                            <button class="btn btn-sm" onclick="window.updateResource(${char.id}, 'armor_slots', -1)" style="padding:0 0.4rem; font-size:0.8rem">-</button>
                             <span class="res-val" style="color:#e78c3c;">${char.armor_slots} / ${char.armor_base_override ?? char.armor_base}</span>
-                            <button class="btn btn-sm" onclick="updateResource(${char.id}, 'armor_slots', 1, ${char.armor_base_override ?? char.armor_base})" style="padding:0 0.4rem; font-size:0.8rem">+</button>
+                            <button class="btn btn-sm" onclick="window.updateResource(${char.id}, 'armor_slots', 1, ${char.armor_base_override ?? char.armor_base})" style="padding:0 0.4rem; font-size:0.8rem">+</button>
                         </span>
                     </div>
                     
@@ -1097,16 +1103,16 @@ function renderCharacterSheet(char, container) {
                         <span style="font-weight:bold; color:var(--accent-gold); display:flex; align-items:center; gap:0.5rem;">
                             Pontos de Vida (PV): ${char.hp_current} / ${char.hp_base} MAX
                             <span style="display:inline-flex; gap:0.3rem;">
-                                <button class="btn btn-sm" onclick="updateResource(${char.id}, 'hp_current', -1, ${char.hp_base})" style="padding:0 0.4rem; font-size:0.75rem;">-</button>
-                                <button class="btn btn-sm" onclick="updateResource(${char.id}, 'hp_current', 1, ${char.hp_base})" style="padding:0 0.4rem; font-size:0.75rem;">+</button>
+                                <button class="btn btn-sm" onclick="window.updateResource(${char.id}, 'hp_current', -1, ${char.hp_base})" style="padding:0 0.4rem; font-size:0.75rem;">-</button>
+                                <button class="btn btn-sm" onclick="window.updateResource(${char.id}, 'hp_current', 1, ${char.hp_base})" style="padding:0 0.4rem; font-size:0.75rem;">+</button>
                             </span>
                         </span>
-                        <div class="pv-circles" style="cursor:pointer;" title="Clique esquerdo para adicionar PV, direito para diminuir" oncontextmenu="event.preventDefault(); updateResource(${char.id}, 'hp_current', -1, ${char.hp_base});" onclick="updateResource(${char.id}, 'hp_current', 1, ${char.hp_base})">
+                        <div class="pv-circles" style="cursor:pointer;" title="Clique esquerdo para adicionar PV, direito para diminuir" oncontextmenu="event.preventDefault(); window.updateResource(${char.id}, 'hp_current', -1, ${char.hp_base});" onclick="window.updateResource(${char.id}, 'hp_current', 1, ${char.hp_base})">
                             ${Array.from({ length: char.hp_base }, (_, i) => `<div class="pv-circle ${i < char.hp_current ? 'filled' : ''}"></div>`).join('')}
                         </div>
                     </div>
                     
-                    <!-- NEW DAMAGE THRESHOLDS -->
+                    <!-- DAMAGE THRESHOLDS -->
                     <div style="margin-bottom: 1.5rem; background:rgba(231,76,60,0.1); padding:0.8rem; border-radius:4px; border:1px solid rgba(231,76,60,0.3);">
                         <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.5rem; text-align:center;">LIMIARES DE DANO DA CLASSE</div>
                         <div style="display:flex; justify-content:space-around; text-align:center;">
@@ -1119,28 +1125,28 @@ function renderCharacterSheet(char, container) {
                     <div class="resource-row">
                         <span style="font-weight:bold; color:#e78c3c;">XP (Experiência)</span>
                         <span style="display:flex; align-items:center; gap:0.5rem;">
-                            <button class="btn btn-sm" onclick="updateResource(${char.id}, 'xp', -1)" style="padding:0 0.4rem; font-size:0.8rem">-</button>
+                            <button class="btn btn-sm" onclick="window.updateResource(${char.id}, 'xp', -1)" style="padding:0 0.4rem; font-size:0.8rem">-</button>
                             <span class="res-val" style="color:#e78c3c;">${char.xp || 0} / 6</span>
-                            <button class="btn btn-sm" onclick="updateResource(${char.id}, 'xp', 1)" style="padding:0 0.4rem; font-size:0.8rem">+</button>
+                            <button class="btn btn-sm" onclick="window.updateResource(${char.id}, 'xp', 1)" style="padding:0 0.4rem; font-size:0.8rem">+</button>
                         </span>
                     </div>
                     <div class="resource-row">
                         <span style="font-weight:bold; color:#3498db;">Esperança (Hope)</span>
                         <span style="display:flex; align-items:center; gap:0.5rem;">
-                            <button class="btn btn-sm" onclick="updateResource(${char.id}, 'hope_current', -1)" style="padding:0 0.4rem; font-size:0.8rem">-</button>
+                            <button class="btn btn-sm" onclick="window.updateResource(${char.id}, 'hope_current', -1)" style="padding:0 0.4rem; font-size:0.8rem">-</button>
                             <span class="res-val" style="color:#3498db;">${char.hope_current} / 6</span>
-                            <button class="btn btn-sm" onclick="updateResource(${char.id}, 'hope_current', 1, 6)" style="padding:0 0.4rem; font-size:0.8rem">+</button>
+                            <button class="btn btn-sm" onclick="window.updateResource(${char.id}, 'hope_current', 1, 6)" style="padding:0 0.4rem; font-size:0.8rem">+</button>
                         </span>
                     </div>
                     <div class="resource-row">
                         <span style="font-weight:bold; color:#e74c3c; display:flex; align-items:center; gap:0.5rem;">
                             Fadiga (Stress)
                             <span style="display:inline-flex; gap:0.3rem;">
-                                <button class="btn btn-sm" onclick="updateResource(${char.id}, 'stress_current', -1, 5)" style="padding:0 0.4rem; font-size:0.75rem;">-</button>
-                                <button class="btn btn-sm" onclick="updateResource(${char.id}, 'stress_current', 1, 5)" style="padding:0 0.4rem; font-size:0.75rem;">+</button>
+                                <button class="btn btn-sm" onclick="window.updateResource(${char.id}, 'stress_current', -1, 5)" style="padding:0 0.4rem; font-size:0.75rem;">-</button>
+                                <button class="btn btn-sm" onclick="window.updateResource(${char.id}, 'stress_current', 1, 5)" style="padding:0 0.4rem; font-size:0.75rem;">+</button>
                             </span>
                         </span>
-                        <div class="pv-circles" style="cursor:pointer;" title="Clique esquerdo para adicionar Stress, direito para diminuir" oncontextmenu="event.preventDefault(); updateResource(${char.id}, 'stress_current', -1, 5);" onclick="updateResource(${char.id}, 'stress_current', 1, 5)">
+                        <div class="pv-circles" style="cursor:pointer;" title="Clique esquerdo para adicionar Stress, direito para diminuir" oncontextmenu="event.preventDefault(); window.updateResource(${char.id}, 'stress_current', -1, 5);" onclick="window.updateResource(${char.id}, 'stress_current', 1, 5)">
                            ${Array.from({ length: 5 }, (_, i) => `<div class="pv-circle stress-circle ${i < char.stress_current ? 'filled-stress' : ''}"></div>`).join('')}
                         </div>
                     </div>
@@ -1305,7 +1311,8 @@ window.equipItem = async function (charId, bagIndex) {
         charToUpdate.inventory.equipped.push(item);
 
         await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: charToUpdate.inventory });
-        renderCharacterSheet(charToUpdate, document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area'));
+        const container = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
+        window.renderCharacterSheet(charToUpdate, container);
     } catch (e) {
         console.error(e);
         alert("Erro ao equipar: " + e.message);
@@ -1331,7 +1338,8 @@ window.unequipItem = async function (charId, equipIndex) {
         charToUpdate.inventory.bag.push(item);
 
         await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: charToUpdate.inventory });
-        renderCharacterSheet(charToUpdate, document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area'));
+        const container = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
+        window.renderCharacterSheet(charToUpdate, container);
     } catch (e) {
         console.error(e);
         alert("Erro ao guardar: " + e.message);
@@ -1351,7 +1359,8 @@ window.dropItem = async function (charId, bagIndex) {
         charToUpdate.inventory.bag.splice(bagIndex, 1);
 
         await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: charToUpdate.inventory });
-        renderCharacterSheet(charToUpdate, document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area'));
+        const container = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
+        window.renderCharacterSheet(charToUpdate, container);
     } catch (e) {
         console.error(e);
         alert("Erro ao excluir: " + e.message);
@@ -1361,17 +1370,18 @@ window.dropItem = async function (charId, bagIndex) {
 window.addItem = async function (charId) {
     const el = document.getElementById(`add-item-input-${charId}`);
     if (el && el.value.trim().length > 0) {
-        if (!currentPlayingCharacter.inventory.bag) currentPlayingCharacter.inventory.bag = [];
+        if (!window.currentPlayingCharacter.inventory.bag) window.currentPlayingCharacter.inventory.bag = [];
 
         const fullItem = (window.DH_EQUIPMENT || []).find(e => e.name === el.value.trim());
         if (fullItem) {
-            currentPlayingCharacter.inventory.bag.push({ id: fullItem.id, name: fullItem.name });
+            window.currentPlayingCharacter.inventory.bag.push({ id: fullItem.id, name: fullItem.name });
         } else {
-            currentPlayingCharacter.inventory.bag.push(el.value.trim());
+            window.currentPlayingCharacter.inventory.bag.push(el.value.trim());
         }
 
-        await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: currentPlayingCharacter.inventory });
-        renderCharacterSheet(currentPlayingCharacter, document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area'));
+        await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: window.currentPlayingCharacter.inventory });
+        const container = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
+        window.renderCharacterSheet(window.currentPlayingCharacter, container);
         el.value = '';
     }
 };
@@ -1383,9 +1393,27 @@ window.removeItem = async function (charId, idx) {
 };
 
 window.updateResource = async function (charId, field, valueDelta, maxLimit) {
-    if (valueDelta > 0 && maxLimit !== undefined) {
-        // Optional client side max limit checking
+    if (!window.currentPlayingCharacter || Number(window.currentPlayingCharacter.id) != Number(charId)) {
+        alert("Erro de Sincronização: A ficha aberta não coincide com o comando enviado. Tente fechar e abrir a ficha novamente.");
+        console.warn("updateResource ignored: currentPlayingCharacter mismatch or missing.", { current: window.currentPlayingCharacter?.id, requested: charId });
+        return;
     }
+
+    // 🔒 Bloqueia o polling para evitar race condition
+    window.resourceUpdateInProgress = true;
+
+    // Optimistic Update
+    const container = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
+    const oldVal = window.currentPlayingCharacter[field];
+
+    // Simple update logic for local UI
+    let newVal = (window.currentPlayingCharacter[field] || 0) + valueDelta;
+    if (newVal < 0 && !field.includes('override')) newVal = 0;
+    if (maxLimit !== undefined && newVal > maxLimit) newVal = maxLimit;
+
+    window.currentPlayingCharacter[field] = newVal;
+    window.renderCharacterSheet(window.currentPlayingCharacter, container);
+
     try {
         const res = await apiCall('character.php?action=update_resource', 'POST', {
             character_id: charId,
@@ -1394,21 +1422,37 @@ window.updateResource = async function (charId, field, valueDelta, maxLimit) {
             max_limit: maxLimit
         });
         if (res.message) {
-            // Re-fetch the fresh character from the backend to ensure accurate state
+            // Sincroniza o valor correto do banco
             const charRefreshed = await apiCall(`character.php?action=get_player_character&id=${charId}`);
             if (charRefreshed && !charRefreshed.error) {
-                if (document.getElementById('gm-char-sheet-container')) {
-                    window.currentPlayingCharacter = charRefreshed;
-                    renderCharacterSheet(charRefreshed, document.getElementById('gm-char-sheet-container'));
-                } else {
-                    openCharacterSheet(charRefreshed);
+                window.currentPlayingCharacter = charRefreshed;
+                // Sincroniza também o gmState.characters para que o polling não reverta
+                if (window.gmState && window.gmState.characters) {
+                    const idx = window.gmState.characters.findIndex(c => Number(c.id) === Number(charId));
+                    if (idx !== -1) {
+                        window.gmState.characters[idx][field] = charRefreshed[field];
+                    }
                 }
+                // Renderiza com o valor correto do banco
+                const freshContainer = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
+                if (freshContainer) window.renderCharacterSheet(charRefreshed, freshContainer);
             }
         } else if (res.error) {
             alert(res.error);
+            // Rollback
+            window.currentPlayingCharacter[field] = oldVal;
+            const freshContainer = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
+            if (freshContainer) window.renderCharacterSheet(window.currentPlayingCharacter, freshContainer);
         }
     } catch (e) {
         alert('Erro ao atualizar recurso: ' + e.message);
+        // Rollback
+        window.currentPlayingCharacter[field] = oldVal;
+        const freshContainer = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
+        if (freshContainer) window.renderCharacterSheet(window.currentPlayingCharacter, freshContainer);
+    } finally {
+        // 🔓 Libera o polling após o update terminar
+        window.resourceUpdateInProgress = false;
     }
 };
 
@@ -1526,7 +1570,7 @@ window.uploadAvatar = async function (charId) {
             if (charRefreshed && !charRefreshed.error) {
                 if (document.getElementById('gm-char-sheet-container')) {
                     window.currentPlayingCharacter = charRefreshed;
-                    renderCharacterSheet(charRefreshed, document.getElementById('gm-char-sheet-container'));
+                    window.renderCharacterSheet(charRefreshed, document.getElementById('gm-char-sheet-container'));
                 } else {
                     openCharacterSheet(charRefreshed);
                 }
@@ -1668,7 +1712,9 @@ window.buyItem = async function (itemId, costVal) {
         // Refresh UI
         document.getElementById('player-shop-gold-display').innerText = formatGold(window.currentPlayingCharacter.inventory.gold || 0);
         renderPlayerShopItems(); // Re-render to update 'Comprar' buttons state
-        renderCharacterSheet(window.currentPlayingCharacter, document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area'));
+        // Optimistic UI update
+        const container = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
+        window.renderCharacterSheet(window.currentPlayingCharacter, container);
 
         alert(`Você comprou ${item.name} com sucesso! O item foi enviado para a sua Mochila.`);
 
@@ -1681,14 +1727,18 @@ window.buyItem = async function (itemId, costVal) {
 };
 
 window.updateAttributeMod = async function (charId, attrKey, delta) {
-    if (!window.currentPlayingCharacter || window.currentPlayingCharacter.id !== charId) return;
+    if (!window.currentPlayingCharacter || Number(window.currentPlayingCharacter.id) != Number(charId)) {
+        console.warn("updateAttributeMod ignored: currentPlayingCharacter mismatch or missing.", { current: window.currentPlayingCharacter?.id, requested: charId });
+        return;
+    }
 
     const modKey = attrKey + '_mod';
     let currentMod = window.currentPlayingCharacter.attributes[modKey] || 0;
     window.currentPlayingCharacter.attributes[modKey] = currentMod + delta;
 
     // Optimistic UI update
-    renderCharacterSheet(window.currentPlayingCharacter, document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area'));
+    const container = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
+    window.renderCharacterSheet(window.currentPlayingCharacter, container);
 
     try {
         await apiCall('character.php?action=update_attributes', 'POST', {
@@ -1698,7 +1748,8 @@ window.updateAttributeMod = async function (charId, attrKey, delta) {
     } catch (e) {
         // Rollback on failure
         window.currentPlayingCharacter.attributes[modKey] -= delta;
-        renderCharacterSheet(window.currentPlayingCharacter, document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area'));
+        const container = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
+        window.renderCharacterSheet(window.currentPlayingCharacter, container);
         alert("Erro ao salvar modificar de atributo: " + e.message);
     }
 };

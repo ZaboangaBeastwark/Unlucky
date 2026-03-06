@@ -8,6 +8,9 @@ let gmState = {
     activeTab: 'session' // 'session' or 'catalog'
 };
 
+// Expõe gmState globalmente para que player.js possa sincronizar após updates
+window.gmState = gmState;
+
 window.handleLinkClick = function (event, callback) {
     if (event.ctrlKey || event.metaKey || event.button === 1 || (event.button === 0 && event.shiftKey)) {
         return true; // Deixa o navegador abrir em nova aba
@@ -29,38 +32,63 @@ async function initGmView() {
 
         gmState.equipment = eqRes.equipment || [];
 
-        gmState.all_sessions = res.all_sessions || [];
-        gmState.characters = res.characters || [];
-        gmState.adversaries = res.adversaries || [];
         gmState.bestiary = res.bestiary || [];
         gmState.encounter_groups = res.encounter_groups || [];
+        gmState.all_sessions = res.all_sessions || [];
+
+        // Clear previous session state to avoid stale renders
+        gmState.session = null;
 
         if (res.session) {
             gmState.session = res.session;
-            renderGmDashboard(container);
-            startGmPolling(); // Initialize auto-sync
+        }
 
-            // Multi-Tab Support: Read URL deep links
-            const params = new URLSearchParams(window.location.search);
-            const view = params.get('view');
-            const id = params.get('id');
+        // Multi-Tab Support: Read URL deep links
+        const params = new URLSearchParams(window.location.search);
+        const view = params.get('view');
+        const id = params.get('id');
+
+        if (gmState.session && (window.forceDashboard || (view && id))) {
+            // If explicitly entering a campaign OR explicitly deep-linked
+            window.forceDashboard = false; // Reset the flag
+            renderGmDashboard(container);
+            startGmPolling();
+            if (view === 'npc') {
+                setTimeout(() => openBestiaryModalFromTemplate(id), 100);
+            } else if (view === 'pc') {
+                setTimeout(() => openGmCharacterSheet(id), 100);
+            }
+
+            // Clear the URL parameters so they don't re-trigger on subsequent re-renders/back clicks
             if (view && id) {
-                if (view === 'npc') {
-                    // Slight delay to ensure DOM is ready for modals
-                    setTimeout(() => openBestiaryModalFromTemplate(id), 100);
-                } else if (view === 'pc') {
-                    setTimeout(() => openGmCharacterSheet(id), 100);
-                }
+                const url = new URL(window.location);
+                url.searchParams.delete('view');
+                url.searchParams.delete('id');
+                window.history.replaceState({}, '', url);
             }
         } else {
-            console.warn("Mestre sem sessão ativa. Mostrando seletor.");
-            renderCreateSession(container);
+            // DEFAULT BEHAVIOR ON LOGIN: Always show campaign selector first
+
+            console.warn("Mostrando seletor de campanhas.");
+            window.forceCampaignSelector = false;
+            // Diagnostic check: if we have campaigns in res but they aren't showing, we need to know
+            if (res.all_sessions && res.all_sessions.length > 0) {
+                console.log("Campanhas recebidas:", res.all_sessions.length);
+            } else {
+                console.error("Nenhuma campanha recebida no JSON.");
+            }
+            if (window.viewingCharId) {
+                openGmCharacterSheet(window.viewingCharId);
+            } else {
+                renderCampaignSelector(container);
+            }
             if (res.debug_user) {
                 container.innerHTML += `<p style="color:red">Debug UserID do PHP: ${res.debug_user}</p>`;
             }
         }
     } catch (e) {
-        container.innerHTML = `<div class="error-msg">Erro do Mestre: ${e.message}</div>`;
+        console.error("Erro Fatal no initGmView:", e);
+        container.innerHTML = `<div class="error-msg">Erro ao carregar painel: ${e.message}</div>`;
     }
 }
 
@@ -118,17 +146,22 @@ function startGmPolling() {
                     const scrollY = window.scrollY;
                     const scrollX = window.scrollX;
 
-                    // If viewing a specific character sheet, re-render it
+                    // If viewing a character, update its state and re-render only if needed
                     if (window.viewingCharId) {
-                        const updatedChar = gmState.characters.find(c => c.id === window.viewingCharId);
-                        if (updatedChar) {
-                            openGmCharacterSheet(updatedChar.id);
-                        } else {
-                            // Character was deleted or removed
-                            window.viewingCharId = null;
-                            initGmView();
+                        // 🔒 Não re-renderiza se um update de recurso está em andamento (evita race condition)
+                        if (!window.resourceUpdateInProgress) {
+                            const updatedChar = data.characters.find(c => c.id == window.viewingCharId);
+                            if (updatedChar) {
+                                window.currentPlayingCharacter = updatedChar;
+                                const gmContainer = document.getElementById('gm-char-sheet-container');
+                                if (gmContainer) {
+                                    // Efficient re-render using existing data
+                                    window.renderCharacterSheet(updatedChar, gmContainer);
+                                }
+                            }
                         }
-                    } else if (gmState.activeTab === 'session') {
+                    }
+                    else if (gmState.activeTab === 'session') {
                         // Re-render dashboard
                         const container = document.getElementById('gm-tab-content');
                         if (container) renderGmSessionTab(container);
@@ -143,41 +176,63 @@ function startGmPolling() {
     }, 2000);
 }
 
-function renderCreateSession(container) {
-    let existingHtml = '';
+function renderCampaignSelector(container) {
+    let campaignsHtml = '';
     if (gmState.all_sessions && gmState.all_sessions.length > 0) {
-        existingHtml = `
-            <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
-                <p style="color:var(--accent-gold); font-weight:bold; margin-bottom:1rem;">Ou continue uma campanha existente:</p>
-                <div style="display:grid; gap:0.8rem;">
-                    ${gmState.all_sessions.map(s => `
-                        <button class="btn btn-outline" style="text-align:left; justify-content:space-between; display:flex; padding:0.8rem 1.2rem; border-color:rgba(255,255,255,0.2);" onclick="changeActiveSession(${s.id})">
-                            <span><i class="fas fa-book" style="color:var(--accent-purple); margin-right:8px;"></i> ${s.name || '(Sem nome)'}</span>
-                            <i class="fas fa-arrow-right" style="font-size:0.8rem; opacity:0.5;"></i>
+        campaignsHtml = `
+            <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:1.5rem; margin-top:2rem;">
+                ${gmState.all_sessions.map(s => `
+                    <div class="glass-panel" style="padding:1.5rem; border:1px solid rgba(255,255,255,0.15); transition:transform 0.2s, border-color 0.2s; cursor:pointer;" 
+                         onmouseover="this.style.transform='translateY(-5px)'; this.style.borderColor='var(--accent-gold)';" 
+                         onmouseout="this.style.transform='none'; this.style.borderColor='rgba(255,255,255,0.15)';"
+                         onclick="changeActiveSession(${s.id})">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1rem;">
+                            <i class="fas fa-book" style="font-size:1.8rem; color:var(--accent-purple);"></i>
+                            <div style="display:flex; gap:0.5rem; align-items:center;">
+                                <span style="font-size:0.75rem; color:var(--text-muted);">ID: ${s.id}</span>
+                                <button onclick="deleteCampaign(${s.id}, event)" style="background:none; border:none; color:#e74c3c; cursor:pointer;" title="Excluir Campanha"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <h4 style="color:var(--accent-gold); font-size:1.2rem; margin-bottom:0.5rem; font-family:'Cinzel', serif;">${s.name || 'Campanha Sem Nome'}</h4>
+                        <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1.5rem;">
+                             Clique para abrir o painel desta campanha.
+                        </div>
+                        <button class="btn btn-outline w-100" style="font-size:0.85rem; padding:0.5rem; border-color:var(--accent-purple); color:var(--accent-purple);">
+                            Entrar na Campanha <i class="fas fa-arrow-right"></i>
                         </button>
-                    `).join('')}
-                </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } else {
+        campaignsHtml = `
+            <div style="text-align:center; padding:4rem 2rem; background:rgba(0,0,0,0.2); border-radius:12px; border:1px dashed rgba(255,255,255,0.1);">
+                <i class="fas fa-folder-open" style="font-size:3rem; color:var(--text-muted); margin-bottom:1rem;"></i>
+                <h4 style="color:white;">Nenhuma campanha encontrada</h4>
+                <p style="color:var(--text-muted);">Clique no botão "Nova Campanha" no topo para começar.</p>
             </div>
         `;
     }
 
     container.innerHTML = `
-        <div class="glass-panel" style="padding: 2rem; max-width: 500px; margin: 0 auto; text-align:center;">
-            <h3 style="color:var(--accent-purple); margin-bottom:1rem;">Painel do Mestre</h3>
-            <p style="color:var(--text-muted); margin-bottom:1.5rem;">Crie uma nova sessão para começar a mestrar.</p>
-            <div class="input-group" style="margin-bottom:1rem;">
-                <input type="text" id="gm-session-name" placeholder="Nome da Campanha (Ex: A Queda de Sabre)">
+        <div style="max-width: 1000px; margin: 0 auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h2 style="color:white; font-family:'Cinzel', serif; font-size:2rem;">Suas Campanhas</h2>
             </div>
-            <button class="btn btn-primary w-100" onclick="createGmSession()">Iniciar Nova Sessão</button>
-            ${existingHtml}
+            ${campaignsHtml}
         </div>
     `;
 }
 
 async function createGmSession() {
-    const name = document.getElementById('gm-session-name').value;
+    const input = document.getElementById('gm-new-session-name');
+    const name = input.value;
+    if (!name) return alert("Por favor, dê um nome à campanha.");
+
     try {
         await apiCall('gm.php?action=create_session', 'POST', { name });
+        document.getElementById('gm-create-session-modal').style.display = 'none';
+        input.value = '';
         initGmView();
     } catch (e) {
         alert("Erro: " + e.message);
@@ -186,6 +241,7 @@ async function createGmSession() {
 
 window.switchGmTab = function (tabName) {
     gmState.activeTab = tabName;
+    window.forceDashboard = true; // Stay in the dashboard view when rendering
     initGmView(); // Re-fetch to guarantee fresh data
 }
 
@@ -195,6 +251,8 @@ function renderGmDashboard(container) {
             <button onclick="switchGmTab('session')" style="background:none; border:none; color:${gmState.activeTab === 'session' ? 'var(--accent-gold)' : 'white'}; padding:0.5rem 1rem; cursor:pointer; border-bottom: ${gmState.activeTab === 'session' ? '2px solid var(--accent-gold)' : 'none'}; font-weight: ${gmState.activeTab === 'session' ? 'bold' : 'normal'}; font-size:1.1rem; white-space:nowrap;">Sessão Ativa</button>
             <button onclick="switchGmTab('bestiary')" style="background:none; border:none; color:${gmState.activeTab === 'bestiary' ? 'var(--accent-gold)' : 'white'}; padding:0.5rem 1rem; cursor:pointer; border-bottom: ${gmState.activeTab === 'bestiary' ? '2px solid var(--accent-gold)' : 'none'}; font-weight: ${gmState.activeTab === 'bestiary' ? 'bold' : 'normal'}; font-size:1.1rem; white-space:nowrap;">Bestiário / NPCs</button>
             <button onclick="switchGmTab('catalog')" style="background:none; border:none; color:${gmState.activeTab === 'catalog' ? 'var(--accent-gold)' : 'white'}; padding:0.5rem 1rem; cursor:pointer; border-bottom: ${gmState.activeTab === 'catalog' ? '2px solid var(--accent-gold)' : 'none'}; font-weight: ${gmState.activeTab === 'catalog' ? 'bold' : 'normal'}; font-size:1.1rem; white-space:nowrap;">Catálogo de Itens</button>
+            <div style="flex-grow:1;"></div>
+            <a href="audit.html?session_id=${gmState.session.id}" target="_blank" style="color:var(--text-muted); padding:0.5rem 1rem; text-decoration:none; display:flex; align-items:center; gap:5px;"><i class="fas fa-history"></i> Log de Auditoria</a>
         </div>
         <div id="gm-tab-content"></div>
     `;
@@ -391,7 +449,8 @@ function renderGmSessionTab(container) {
 
     container.innerHTML = `
         <div class="sheet-header glass-panel" style="border-left: 4px solid var(--accent-purple); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
-            <div class="sheet-title">
+            <div class="sheet-title" style="display:flex; align-items:center; gap:1rem;">
+                <button class="btn btn-outline" onclick="backToCampaigns()" title="Voltar para Lista de Campanhas" style="padding:0.4rem 0.8rem; border-color:var(--text-muted); color:var(--text-muted);"><i class="fas fa-chevron-left"></i> Campanhas</button>
                 <h2>${s.name} <span style="font-size:1rem; color:var(--text-muted);">(ID: ${s.id})</span></h2>
             </div>
             <div style="display:flex; gap:1rem; flex-wrap:wrap;">
@@ -437,17 +496,39 @@ window.changeActiveSession = async function (sessionId) {
     if (!sessionId) return;
     try {
         await apiCall('gm.php?action=set_active_session', 'POST', { session_id: sessionId });
+        window.forceDashboard = true; // Tell initGmView we want to see the dashboard now
         initGmView();
     } catch (e) {
         alert("Erro ao alterar sessão: " + e.message);
     }
 };
 
+window.deleteCampaign = async function (sessionId, event) {
+    event.stopPropagation(); // Prevent triggering the card's changeActiveSession
+    if (!confirm('Deseja EXCLUIR permanentemente esta campanha e todos os seus dados (Personagens, Monstros, Logs)? Esta ação não pode ser desfeita.')) return;
+
+    try {
+        await apiCall('gm.php?action=delete_session', 'POST', { session_id: sessionId });
+        initGmView(); // Reload the campaign list
+    } catch (e) {
+        alert("Erro ao excluir campanha: " + e.message);
+    }
+};
+
 window.showGmCreateSessionModal = function () {
-    const name = prompt("Nome da Nova Sessão/Campanha:");
-    if (name) {
-        document.getElementById('gm-session-name').value = name;
-        createGmSession();
+    document.getElementById('gm-create-session-modal').style.display = 'flex';
+    document.getElementById('gm-new-session-name').focus();
+};
+
+window.backToCampaigns = async () => {
+    try {
+        await apiCall('gm.php?action=unset_active_session', 'POST');
+        if (gmPollInterval) clearInterval(gmPollInterval);
+        gmState.session = null;
+        window.forceCampaignSelector = true;
+        initGmView();
+    } catch (e) {
+        alert("Erro ao voltar: " + e.message);
     }
 };
 
@@ -595,17 +676,14 @@ window.openGmCharacterSheet = async function (charId) {
         const container = document.getElementById('gm-dynamic-area');
 
         container.innerHTML = `
-            <div style="position:absolute; top:1rem; left:1rem; cursor:pointer; color:var(--text-muted); font-size:1.5rem;" onclick="window.viewingCharId=null; initGmView()" title="Voltar para o Painel">
-            <i class="fas fa-arrow-left"></i>
-        </div>
             <div id="gm-char-sheet-container"></div>
         `;
 
         // This is necessary so player.js functions like updateResource() affect this character
         window.currentPlayingCharacter = char;
 
-        // Render the exact same sheet the player sees
-        window.renderCharacterSheet(char, document.getElementById('gm-char-sheet-container'));
+        // Render the exact same sheet the player sees, but with GM back behavior
+        window.renderCharacterSheet(char, document.getElementById('gm-char-sheet-container'), 'window.viewingCharId=null; window.forceDashboard=true; initGmView()');
 
     } catch (e) {
         alert("Erro ao abrir a ficha do jogador: " + e.message);

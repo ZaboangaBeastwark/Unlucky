@@ -54,18 +54,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Logout logic
-    const handleLogout = async () => {
+    // Logout logic made global for reliability with dynamic elements
+    window.handleLogout = async () => {
         try {
             await apiCall('auth.php?action=logout', 'POST');
             window.appState.user = null;
             if (typeof stopLogPolling === 'function') stopLogPolling();
+            if (typeof gmPollInterval !== 'undefined') clearInterval(gmPollInterval);
             showView('view-auth');
         } catch (err) {
             console.error('Logout failed', err);
+            // Force return to auth anyway if session is dead
+            showView('view-auth');
         }
     };
-
-    document.getElementById('btn-logout-player')?.addEventListener('click', handleLogout);
-    document.getElementById('btn-logout-gm')?.addEventListener('click', handleLogout);
 });

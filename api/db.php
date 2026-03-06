@@ -51,3 +51,46 @@ function jsonResponse($data, $status = 200)
     echo $json;
     exit;
 }
+
+// Global helper to log campaign actions natively across any API modifying state
+function logAudit($pdo, $session_id, $character_id, $character_name, $action_type, $description)
+{
+    if (!isset($_SESSION['user_id']))
+        return;
+
+    try {
+        $user_id = $_SESSION['user_id'];
+        $actor_name = $_SESSION['username'] ?? 'Desconhecido';
+        $user_role = $_SESSION['role'] ?? 'jogador';
+
+        // Fallbacks if character values aren't provided straight away but we know the session
+        $session_name = "Sessão $session_id";
+        if ($session_id) {
+            $stmt = $pdo->prepare('SELECT name FROM sessions WHERE id = ?');
+            $stmt->execute([$session_id]);
+            $sName = $stmt->fetchColumn();
+            if ($sName)
+                $session_name = $sName;
+        }
+
+        $stmt = $pdo->prepare('
+            INSERT INTO audit_logs 
+            (session_id, session_name, character_id, user_id, user_role, actor_name, character_name, action_type, description) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ');
+        $stmt->execute([
+            $session_id,
+            $session_name,
+            $character_id,
+            $user_id,
+            $user_role,
+            $actor_name,
+            $character_name,
+            $action_type,
+            $description
+        ]);
+    } catch (Exception $e) {
+        // Silently log error to file but don't crash the main request
+        error_log("Audit Log Failure: " . $e->getMessage());
+    }
+}
