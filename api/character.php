@@ -52,6 +52,16 @@ if ($method === 'GET') {
             $char['experiences'] = json_decode($char['experiences'], true);
             $char['cards'] = json_decode($char['cards'], true);
             $char['roleplay_answers'] = json_decode($char['roleplay_answers'], true);
+
+            // Fetch logs if session exists
+            $char['logs'] = [];
+            $lastLogId = $_GET['last_log_id'] ?? null;
+            if ($char['session_id'] && $lastLogId !== null) {
+                $stmtL = $pdo->prepare('SELECT * FROM action_logs WHERE session_id = ? AND id > ? ORDER BY id ASC LIMIT 50');
+                $stmtL->execute([$char['session_id'], $lastLogId]);
+                $char['logs'] = $stmtL->fetchAll(PDO::FETCH_ASSOC);
+            }
+
             jsonResponse($char);
         } else {
             jsonResponse(['error' => 'Not found'], 404);

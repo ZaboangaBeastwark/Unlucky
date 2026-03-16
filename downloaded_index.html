@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-br">
 
 <head>
@@ -9,32 +9,6 @@
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css?v=2">
-    <script>
-        window.addEventListener('error', function (event) {
-            console.error('GLOBAL ERRO Capturado:', event.error || event.message);
-            const msg = (event.error && event.error.stack) ? event.error.stack : event.message;
-            let errDiv = document.getElementById('global-crash-banner');
-            if (!errDiv) {
-                errDiv = document.createElement('div');
-                errDiv.id = 'global-crash-banner';
-                errDiv.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:auto; background:red; color:white; padding:10px; z-index:999999; font-weight:bold; font-size:12px; white-space:pre-wrap; max-height:300px; overflow-y:auto; border-bottom:3px solid darkred; text-align:left; font-family:monospace;';
-                document.body.prepend(errDiv);
-            }
-            errDiv.innerText += "CRASH: " + msg + "\n\n";
-        });
-        window.addEventListener('unhandledrejection', function (event) {
-            console.error('GLOBAL PROMISE REJECTION:', event.reason);
-            const msg = (event.reason && event.reason.stack) ? event.reason.stack : (event.reason ? event.reason.toString() : 'Unknown rejection');
-            let errDiv = document.getElementById('global-crash-banner');
-            if (!errDiv) {
-                errDiv = document.createElement('div');
-                errDiv.id = 'global-crash-banner';
-                errDiv.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:auto; background:red; color:white; padding:10px; z-index:999999; font-weight:bold; font-size:12px; white-space:pre-wrap; max-height:300px; overflow-y:auto; border-bottom:3px solid darkred; text-align:left; font-family:monospace;';
-                document.body.prepend(errDiv);
-            }
-            errDiv.innerText += "PROMISE REJECTION: " + msg + "\n\n";
-        });
-    </script>
 </head>
 
 <body>
@@ -55,7 +29,7 @@
 
                 <form id="login-form" class="auth-form active">
                     <div class="input-group">
-                        <label for="login-username">Usuário</label>
+                        <label for="login-username">UsuÃ¡rio</label>
                         <input type="text" id="login-username" required>
                     </div>
                     <div class="input-group">
@@ -68,7 +42,7 @@
 
                 <form id="register-form" class="auth-form">
                     <div class="input-group">
-                        <label for="reg-username">Usuário</label>
+                        <label for="reg-username">UsuÃ¡rio</label>
                         <input type="text" id="reg-username" required>
                     </div>
                     <div class="input-group">
@@ -87,7 +61,7 @@
                 </form>
 
                 <div style="text-align: center; margin-top: 1.5rem; font-size: 0.7rem; color: rgba(255,255,255,0.3);">
-                    Versão Alfa 0.1</div>
+                    VersÃ£o Alfa 0.1</div>
             </div>
         </main>
 
@@ -122,7 +96,7 @@
                             class="fas fa-store"></i> Mercado</h2>
                     <div
                         style="font-size:1.2rem; background:rgba(0,0,0,0.5); padding:0.5rem 1rem; border-radius:8px; border:1px solid var(--accent-gold);">
-                        Ouro Disponível: <span id="player-shop-gold-display"
+                        Ouro DisponÃ­vel: <span id="player-shop-gold-display"
                             style="color:var(--accent-gold); font-weight:bold;">0</span></div>
                 </div>
 
@@ -133,11 +107,11 @@
                     <select id="player-shop-category" onchange="filterPlayerShop()"
                         style="flex:1; background:rgba(0,0,0,0.5); border:1px solid var(--glass-border); color:white; padding:0.8rem; border-radius:4px;">
                         <option value="all">Todas as Mercadorias</option>
-                        <option value="primary_weapon">Armas Primárias</option>
-                        <option value="secondary_weapon">Armas Secundárias</option>
+                        <option value="primary_weapon">Armas PrimÃ¡rias</option>
+                        <option value="secondary_weapon">Armas SecundÃ¡rias</option>
                         <option value="armor">Armaduras</option>
                         <option value="adventure_item">Itens de Aventura</option>
-                        <option value="consumable">Consumíveis</option>
+                        <option value="consumable">ConsumÃ­veis</option>
                         <option value="professional_kit">Kits Profissionais</option>
                     </select>
                 </div>
@@ -177,7 +151,7 @@
                 <h2 style="color:var(--accent-purple); margin-bottom:1.5rem; text-align:center;">Nova Campanha</h2>
                 <div class="input-group" style="margin-bottom:1.5rem;">
                     <label>Nome da Campanha</label>
-                    <input type="text" id="gm-new-session-name" placeholder="Ex: Crônicas de Sabre" required>
+                    <input type="text" id="gm-new-session-name" placeholder="Ex: CrÃ´nicas de Sabre" required>
                 </div>
                 <div style="display:flex; gap:1rem;">
                     <button class="btn btn-outline w-100"
@@ -204,16 +178,16 @@
                         <div class="input-group">
                             <label>Categoria</label>
                             <select id="gm-item-category" required>
-                                <option value="primary_weapon">Arma Primária</option>
-                                <option value="secondary_weapon">Arma Secundária</option>
+                                <option value="primary_weapon">Arma PrimÃ¡ria</option>
+                                <option value="secondary_weapon">Arma SecundÃ¡ria</option>
                                 <option value="armor">Armadura</option>
                                 <option value="adventure_item">Item de Aventura</option>
-                                <option value="consumable">Consumível</option>
+                                <option value="consumable">ConsumÃ­vel</option>
                                 <option value="professional_kit">Kit Profissional</option>
                             </select>
                         </div>
                         <div class="input-group">
-                            <label>Tier (Nível de Poder)</label>
+                            <label>Tier (NÃ­vel de Poder)</label>
                             <input type="number" id="gm-item-tier" min="1" max="4" value="1" required>
                         </div>
                         <div class="input-group">
@@ -223,14 +197,14 @@
                     </div>
 
                     <div class="input-group" style="margin-top:1rem;">
-                        <label>Descrição Opcional ou Traços (Visível aos Jogadores)</label>
+                        <label>DescriÃ§Ã£o Opcional ou TraÃ§os (VisÃ­vel aos Jogadores)</label>
                         <textarea id="gm-item-desc" rows="3"></textarea>
                     </div>
 
                     <div class="input-group" style="margin-top:1rem;">
-                        <label>Estatísticas Específicas (JSON)</label>
+                        <label>EstatÃ­sticas EspecÃ­ficas (JSON)</label>
                         <textarea id="gm-item-data" rows="4"
-                            placeholder='Ex Armas: {"damage":"d8", "attr":"Força", "slots":1}&#10;Ex Armaduras: {"armor_base":3, "evasion_mod":0}'></textarea>
+                            placeholder='Ex Armas: {"damage":"d8", "attr":"ForÃ§a", "slots":1}&#10;Ex Armaduras: {"armor_base":3, "evasion_mod":0}'></textarea>
                     </div>
 
                     <div style="display:flex; justify-content:space-between; margin-top:2rem;">
@@ -262,7 +236,7 @@
                     <input type="hidden" id="gm-bestiary-id">
 
                     <h3 style="color:#d35400; border-bottom:1px solid #d35400; margin-bottom:1rem; padding-bottom:5px;">
-                        Dados Básicos e Lore</h3>
+                        Dados BÃ¡sicos e Lore</h3>
 
                     <!-- Omitted Avatar / VTT Upload section for performance isolation -->
 
@@ -285,7 +259,7 @@
 
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; margin-top:1rem;">
                         <div class="input-group">
-                            <label>Tipo de Adversário</label>
+                            <label>Tipo de AdversÃ¡rio</label>
                             <select id="gm-bestiary-type" required onchange="toggleHordeMultiplier()">
                                 <option value="Comum">Comum</option>
                                 <option value="Lacaio">Lacaio</option>
@@ -293,7 +267,7 @@
                                 <option value="Assistente">Assistente</option>
                                 <option value="Atirador">Atirador</option>
                                 <option value="Brutamonte">Brutamonte</option>
-                                <option value="Líder">Líder</option>
+                                <option value="LÃ­der">LÃ­der</option>
                                 <option value="Manipulador">Manipulador</option>
                                 <option value="Oportunista">Oportunista</option>
                                 <option value="Solo">Solo</option>
@@ -309,7 +283,7 @@
                         <div class="input-group">
                             <label>Status</label>
                             <div style="display:flex; gap:10px; align-items:center;">
-                                <input type="number" id="gm-bestiary-hp" title="PV Máximo" placeholder="PV"
+                                <input type="number" id="gm-bestiary-hp" title="PV MÃ¡ximo" placeholder="PV"
                                     style="width:50%" required>
                                 <input type="number" id="gm-bestiary-pf" title="Pontos de Fadiga" placeholder="PF"
                                     style="width:50%" required>
@@ -325,12 +299,12 @@
                     </div>
 
                     <div class="input-group" style="margin-top:1rem;">
-                        <label>Motivações e Táticas</label>
-                        <input type="text" id="gm-bestiary-motifs" placeholder="Ex: fugir, lucrar, roubar, usar fumaça">
+                        <label>MotivaÃ§Ãµes e TÃ¡ticas</label>
+                        <input type="text" id="gm-bestiary-motifs" placeholder="Ex: fugir, lucrar, roubar, usar fumaÃ§a">
                     </div>
 
                     <div class="input-group" style="margin-top:1rem;">
-                        <label>Descrição Opcional</label>
+                        <label>DescriÃ§Ã£o Opcional</label>
                         <textarea id="gm-bestiary-desc" rows="2"
                             style="width:100%; padding:0.8rem; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); border-radius:8px; color:white; font-family:var(--font-body);"
                             placeholder="Um criminoso ardiloso de capa usa uma faca..."></textarea>
@@ -339,19 +313,19 @@
                     <h3
                         style="color:#d35400; border-bottom:1px solid #d35400; margin-top:2rem; margin-bottom:1rem; padding-bottom:5px;">
                         Ataque e Regras</h3>
-                    <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:1rem;">Configure o ataque padrão
-                        e adicione as características especiais do oponente.</p>
+                    <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:1rem;">Configure o ataque padrÃ£o
+                        e adicione as caracterÃ­sticas especiais do oponente.</p>
 
                     <div class="input-group"
                         style="border-left:3px solid #f39c12; padding-left:10px; margin-bottom:1rem;">
-                        <label>Ataque Padrão</label>
+                        <label>Ataque PadrÃ£o</label>
                         <div style="display:grid; grid-template-columns: 80px 1fr 120px 120px; gap:10px;">
                             <input type="text" id="gm-atk-mod" placeholder="ATQ Mod (+2)" style="width:100%;">
                             <input type="text" id="gm-atk-name" placeholder="Nome (Ex: Adagas)">
                             <select id="gm-atk-range">
                                 <option value="corpo a corpo">Corpo a Corpo</option>
-                                <option value="muito próximo">Muito Próximo</option>
-                                <option value="próximo">Próximo</option>
+                                <option value="muito prÃ³ximo">Muito PrÃ³ximo</option>
+                                <option value="prÃ³ximo">PrÃ³ximo</option>
                                 <option value="distante">Distante</option>
                             </select>
                             <input type="text" id="gm-atk-dmg" placeholder="Dano (1d8+1 fis)">
@@ -361,10 +335,10 @@
                     <div class="input-group" style="margin-top:1rem;">
                         <div
                             style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                            <label style="margin:0;">Experiências</label>
+                            <label style="margin:0;">ExperiÃªncias</label>
                             <button type="button" class="btn btn-outline"
                                 style="padding:0.3rem 0.8rem; font-size:0.8rem; border-color:#3498db; color:#3498db;"
-                                onclick="addBestiaryXpRow()">+ Experiência</button>
+                                onclick="addBestiaryXpRow()">+ ExperiÃªncia</button>
                         </div>
                         <div id="gm-bestiary-xp-list" style="display:flex; flex-direction:column; gap:0.5rem;">
                             <!-- Dynamic XP rows -->
@@ -391,7 +365,7 @@
                                 onclick="deleteBestiaryTemplate()">Excluir Ficha</button>
                             <button type="button" id="gm-bestiary-duplicate-btn" class="btn btn-outline"
                                 style="border-color:var(--accent-purple); color:var(--accent-purple); display:none;"
-                                onclick="duplicateBestiaryTemplate()"><i class="fas fa-copy"></i> Criar Cópia</button>
+                                onclick="duplicateBestiaryTemplate()"><i class="fas fa-copy"></i> Criar CÃ³pia</button>
                         </div>
                         <div style="display:flex; gap:1rem;">
                             <button type="button" class="btn btn-outline"
@@ -436,12 +410,12 @@
 
     <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script src="js/api.js?v=509.3"></script>
-    <script src="js/auth.js?v=509.3"></script>
-    <script src="js/dh_data.js?v=509.3"></script>
-    <script src="js/player.js?v=509.3"></script>
-    <script src="js/gm.js?v=509.3"></script>
-    <script src="js/app.js?v=509.3"></script>
+    <script src="js/api.js?v=502"></script>
+    <script src="js/auth.js?v=502"></script>
+    <script src="js/dh_data.js?v=502"></script>
+    <script src="js/player.js?v=502"></script>
+    <script src="js/gm.js?v=502"></script>
+    <script src="js/app.js?v=502"></script>
 </body>
 
 </html>

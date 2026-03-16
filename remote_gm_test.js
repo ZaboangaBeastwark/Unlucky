@@ -8,24 +8,6 @@ let gmState = {
     activeTab: 'session' // 'session' or 'catalog'
 };
 
-// Expõe gmState globalmente para que player.js possa sincronizar após updates
-window.gmState = gmState;
-
-window.withGmLoading = async function (actionPromise) {
-    const loader = document.getElementById('gm-global-loading');
-    if (loader) loader.style.display = 'flex';
-    try {
-        await actionPromise();
-        // optionally wait a little bit for DOM updates or new polling
-        await new Promise(r => setTimeout(r, 200));
-    } catch (e) {
-        console.error("Action error:", e);
-        alert(e.message || "Erro durante a ação.");
-    } finally {
-        if (loader) loader.style.display = 'none';
-    }
-};
-
 window.handleLinkClick = function (event, callback) {
     if (event.ctrlKey || event.metaKey || event.button === 1 || (event.button === 0 && event.shiftKey)) {
         return true; // Deixa o navegador abrir em nova aba
@@ -38,95 +20,92 @@ window.handleLinkClick = function (event, callback) {
 };
 
 async function initGmView() {
-    window.forceDashboard = true;
     const container = document.getElementById('gm-dynamic-area');
-
-    // Only show "Carregando" on the very first load or if the container is empty
-    if (!container.innerHTML.trim() || container.innerHTML.includes('Carregando panel')) {
-        container.innerHTML = `<div class="glass-panel" style="padding: 2rem; text-align: center;"><div style="width: 30px; height: 30px; border: 3px solid var(--accent-purple); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 10px;"></div> Carregando...</div>`;
-    }
+    container.innerHTML = `<div class="glass-panel" style="padding: 2rem; text-align: center;">Carregando painel...</div>`;
 
     try {
-        const res = await apiCall(`gm.php?action=init&_t=${Date.now()}`);
+        const res = await apiCall(`gm.php?action=session_data_live&_t=${Date.now()}`);
+        const eqRes = await apiCall('equipment.php?action=list');
 
-        // Only fetch equipment list once
-        if (gmState.equipment.length === 0) {
-            const eqRes = await apiCall('equipment.php?action=list');
-            gmState.equipment = eqRes.equipment || [];
-        }
+        gmState.equipment = eqRes.equipment || [];
 
-        gmState.characters = res.characters || [];
-        gmState.adversaries = res.adversaries || [];
         gmState.bestiary = res.bestiary || [];
-        gmState.all_sessions = res.all_sessions || [];
         gmState.encounter_groups = res.encounter_groups || [];
+        gmState.all_sessions = res.all_sessions || [];
 
-        // Determine if we should show the dashboard or campaign selector
-        if (gmState.session && gmState.session.id) {
-            // Re-sync current session data if we are already inside a campaign
-            const activeSessionId = gmState.session.id;
-            const liveData = await apiCall(`gm.php?action=session_data_live&session_id=${activeSessionId}&_t=${Date.now()}`);
-            if (liveData.session) {
-                gmState.session = liveData.session;
-                gmState.characters = liveData.characters || [];
-                gmState.adversaries = liveData.adversaries || [];
-                gmState.encounter_groups = liveData.encounter_groups || [];
-            }
+        // Clear previous session state to avoid stale renders
+        gmState.session = null;
 
-            // Optimize: Re-render only if the dashboard structure isn't there yet
-            if (!document.getElementById('gm-tab-content')) {
-                renderGmDashboard(container);
-            } else {
-                // Just refresh the active tab content
-                const contentArea = document.getElementById('gm-tab-content');
-                if (gmState.activeTab === 'session') renderGmSessionTab(contentArea);
-                else if (gmState.activeTab === 'bestiary') renderGmBestiaryTab(contentArea);
-                else renderGmCatalogTab(contentArea);
+        if (res.session && !window.forceCampaignSelector) {
+            gmState.session = res.session;
+            renderGmDashboard(container);
+            startGmPolling(); // Initialize auto-sync
+
+            // Multi-Tab Support: Read URL deep links
+            const params = new URLSearchParams(window.location.search);
+            const view = params.get('view');
+            const id = params.get('id');
+            if (view && id) {
+                if (view === 'npc') {
+                    // Slight delay to ensure DOM is ready for modals
+                    setTimeout(() => openBestiaryModalFromTemplate(id), 100);
+                } else if (view === 'pc') {
+                    setTimeout(() => openGmCharacterSheet(id), 100);
+                }
             }
-            startGmPolling();
         } else {
-            // Show campaign selector
-            if (gmPollInterval) clearInterval(gmPollInterval);
+            console.warn("Mostrando seletor de campanhas.");
+            window.forceCampaignSelector = false;
+            // Diagnostic check: if we have campaigns in res but they aren't showing, we need to know
+            if (res.all_sessions && res.all_sessions.length > 0) {
+                console.log("Campanhas recebidas:", res.all_sessions.length);
+            } else {
+                console.error("Nenhuma campanha recebida no JSON.");
+            }
             renderCampaignSelector(container);
+            if (res.debug_user) {
+                container.innerHTML += `<p style="color:red">Debug UserID do PHP: ${res.debug_user}</p>`;
+            }
         }
     } catch (e) {
-        console.error("Erro no initGmView:", e);
-        container.innerHTML = `<div class="error-msg">Erro Crítico: ${e.message}</div>`;
+        console.error("Erro Fatal no initGmView:", e);
+        container.innerHTML = `<div class="error-msg">Erro ao carregar painel: ${e.message}</div>`;
     }
 }
 
 let gmPollInterval;
-let gmPollInProgress = false;
 function startGmPolling() {
     if (gmPollInterval) clearInterval(gmPollInterval);
-    gmPollInProgress = false;
 
     gmPollInterval = setInterval(async () => {
-        if (gmPollInProgress) return;
-        gmPollInProgress = true;
         try {
-            const currentLastLogId = window.lastLogId || 0;
-            const data = await apiCall(`gm.php?action=session_data_live&session_id=${gmState.session?.id}&last_log_id=${currentLastLogId}&_t=${Date.now()}`);
+            // Fetch raw JSON to avoid state mutation before comparison
+            const rawRes = await fetch(`${API_BASE}gm.php?action=session_data_live&_t=${Date.now()}`, { cache: 'no-store' });
+            const data = await rawRes.json();
 
             if (data.session) {
-                // Process combined logs
-                if (data.logs && typeof window.processNewLogs === 'function') {
-                    window.processNewLogs(data.logs);
-                }
-
-                let needsRender = false;
-                // ... comparison logic ...
                 const s1 = JSON.stringify(gmState.characters);
                 const s2 = JSON.stringify(data.characters);
+
+                const a1 = JSON.stringify(gmState.adversaries);
+                const a2 = JSON.stringify(data.adversaries);
+
+                let needsRender = false;
+
                 if (s1 !== s2) {
                     gmState.characters = data.characters;
                     needsRender = true;
                 }
 
-                const a1 = JSON.stringify(gmState.adversaries);
-                const a2 = JSON.stringify(data.adversaries);
                 if (a1 !== a2) {
                     gmState.adversaries = data.adversaries;
+                    needsRender = true;
+                }
+
+                const b1 = JSON.stringify(gmState.bestiary);
+                const b2 = JSON.stringify(data.bestiary || []);
+                if (b1 !== b2) {
+                    gmState.bestiary = data.bestiary || [];
                     needsRender = true;
                 }
 
@@ -137,34 +116,40 @@ function startGmPolling() {
                     needsRender = true;
                 }
 
+                const all1 = JSON.stringify(gmState.all_sessions);
+                const all2 = JSON.stringify(data.all_sessions || []);
+                if (all1 !== all2) {
+                    gmState.all_sessions = data.all_sessions || [];
+                    needsRender = true;
+                }
+
                 if (needsRender) {
                     const scrollY = window.scrollY;
                     const scrollX = window.scrollX;
 
+                    // If viewing a specific character sheet, re-render it
                     if (window.viewingCharId) {
-                        if (!window.resourceUpdateInProgress) {
-                            const updatedChar = data.characters.find(c => c.id == window.viewingCharId);
-                            if (updatedChar) {
-                                window.currentPlayingCharacter = updatedChar;
-                                const gmContainer = document.getElementById('gm-char-sheet-container');
-                                if (gmContainer) {
-                                    window.renderCharacterSheet(updatedChar, gmContainer);
-                                }
-                            }
+                        const updatedChar = gmState.characters.find(c => c.id === window.viewingCharId);
+                        if (updatedChar) {
+                            openGmCharacterSheet(updatedChar.id);
+                        } else {
+                            // Character was deleted or removed
+                            window.viewingCharId = null;
+                            initGmView();
                         }
                     } else if (gmState.activeTab === 'session') {
+                        // Re-render dashboard
                         const container = document.getElementById('gm-tab-content');
                         if (container) renderGmSessionTab(container);
                     }
+
                     window.scrollTo(scrollX, scrollY);
                 }
             }
         } catch (e) {
             console.error("Erro no polling do GM:", e);
-        } finally {
-            gmPollInProgress = false;
         }
-    }, 5000); // Consolidated 5 second poll
+    }, 2000);
 }
 
 function renderCampaignSelector(container) {
@@ -179,10 +164,7 @@ function renderCampaignSelector(container) {
                          onclick="changeActiveSession(${s.id})">
                         <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1rem;">
                             <i class="fas fa-book" style="font-size:1.8rem; color:var(--accent-purple);"></i>
-                            <div style="display:flex; gap:0.5rem; align-items:center;">
-                                <span style="font-size:0.75rem; color:var(--text-muted);">ID: ${s.id}</span>
-                                <button onclick="deleteCampaign(${s.id}, event)" style="background:none; border:none; color:#e74c3c; cursor:pointer;" title="Excluir Campanha"><i class="fas fa-trash"></i></button>
-                            </div>
+                            <span style="font-size:0.75rem; color:var(--text-muted);">ID: ${s.id}</span>
                         </div>
                         <h4 style="color:var(--accent-gold); font-size:1.2rem; margin-bottom:0.5rem; font-family:'Cinzel', serif;">${s.name || 'Campanha Sem Nome'}</h4>
                         <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1.5rem;">
@@ -220,22 +202,19 @@ async function createGmSession() {
     const name = input.value;
     if (!name) return alert("Por favor, dê um nome à campanha.");
 
-    window.withGmLoading(async () => {
-        try {
-            await apiCall('gm.php?action=create_session', 'POST', { name });
-            document.getElementById('gm-create-session-modal').style.display = 'none';
-            input.value = '';
-            initGmView();
-        } catch (e) {
-            alert("Erro: " + e.message);
-        }
-    });
+    try {
+        await apiCall('gm.php?action=create_session', 'POST', { name });
+        document.getElementById('gm-create-session-modal').style.display = 'none';
+        input.value = '';
+        initGmView();
+    } catch (e) {
+        alert("Erro: " + e.message);
+    }
 }
 
 window.switchGmTab = function (tabName) {
     gmState.activeTab = tabName;
-    const mainContainer = document.getElementById('gm-dynamic-area');
-    renderGmDashboard(mainContainer);
+    initGmView(); // Re-fetch to guarantee fresh data
 }
 
 function renderGmDashboard(container) {
@@ -244,8 +223,6 @@ function renderGmDashboard(container) {
             <button onclick="switchGmTab('session')" style="background:none; border:none; color:${gmState.activeTab === 'session' ? 'var(--accent-gold)' : 'white'}; padding:0.5rem 1rem; cursor:pointer; border-bottom: ${gmState.activeTab === 'session' ? '2px solid var(--accent-gold)' : 'none'}; font-weight: ${gmState.activeTab === 'session' ? 'bold' : 'normal'}; font-size:1.1rem; white-space:nowrap;">Sessão Ativa</button>
             <button onclick="switchGmTab('bestiary')" style="background:none; border:none; color:${gmState.activeTab === 'bestiary' ? 'var(--accent-gold)' : 'white'}; padding:0.5rem 1rem; cursor:pointer; border-bottom: ${gmState.activeTab === 'bestiary' ? '2px solid var(--accent-gold)' : 'none'}; font-weight: ${gmState.activeTab === 'bestiary' ? 'bold' : 'normal'}; font-size:1.1rem; white-space:nowrap;">Bestiário / NPCs</button>
             <button onclick="switchGmTab('catalog')" style="background:none; border:none; color:${gmState.activeTab === 'catalog' ? 'var(--accent-gold)' : 'white'}; padding:0.5rem 1rem; cursor:pointer; border-bottom: ${gmState.activeTab === 'catalog' ? '2px solid var(--accent-gold)' : 'none'}; font-weight: ${gmState.activeTab === 'catalog' ? 'bold' : 'normal'}; font-size:1.1rem; white-space:nowrap;">Catálogo de Itens</button>
-            <div style="flex-grow:1;"></div>
-            <a href="audit.html?session_id=${gmState.session.id}" target="_blank" style="color:var(--text-muted); padding:0.5rem 1rem; text-decoration:none; display:flex; align-items:center; gap:5px;"><i class="fas fa-history"></i> Log de Auditoria</a>
         </div>
         <div id="gm-tab-content"></div>
     `;
@@ -482,35 +459,17 @@ function renderGmSessionTab(container) {
         </div>
     `;
 
-    // Polling handles itself if already active for this session
-    if (typeof startLogPolling === 'function') startLogPolling(s.id);
+    startLogPolling(s.id);
 }
 
 window.changeActiveSession = async function (sessionId) {
     if (!sessionId) return;
-    window.withGmLoading(async () => {
-        try {
-            gmState.session = { id: sessionId };
-            window.forceDashboard = true; // Tell initGmView we want to see the dashboard now
-            initGmView();
-        } catch (e) {
-            alert("Erro ao alterar sessão: " + e.message);
-        }
-    });
-};
-
-window.deleteCampaign = async function (sessionId, event) {
-    event.stopPropagation(); // Prevent triggering the card's changeActiveSession
-    if (!confirm('Deseja EXCLUIR permanentemente esta campanha e todos os seus dados (Personagens, Monstros, Logs)? Esta ação não pode ser desfeita.')) return;
-
-    window.withGmLoading(async () => {
-        try {
-            await apiCall('gm.php?action=delete_session', 'POST', { session_id: sessionId });
-            initGmView(); // Reload the campaign list
-        } catch (e) {
-            alert("Erro ao excluir campanha: " + e.message);
-        }
-    });
+    try {
+        await apiCall('gm.php?action=set_active_session', 'POST', { session_id: sessionId });
+        initGmView();
+    } catch (e) {
+        alert("Erro ao alterar sessão: " + e.message);
+    }
 };
 
 window.showGmCreateSessionModal = function () {
@@ -519,85 +478,71 @@ window.showGmCreateSessionModal = function () {
 };
 
 window.backToCampaigns = async () => {
-    window.withGmLoading(async () => {
-        try {
-            if (typeof stopLogPolling === 'function') stopLogPolling();
-            if (gmPollInterval) clearInterval(gmPollInterval);
-            
-            await apiCall('gm.php?action=unset_active_session', 'POST');
-            
-            gmState.session = null;
-            window.forceDashboard = false; // Reset dashboard state
-            window.forceCampaignSelector = true;
-            await initGmView(); 
-        } catch (e) {
-            alert("Erro ao voltar: " + e.message);
-        }
-    });
+    try {
+        await apiCall('gm.php?action=unset_active_session', 'POST');
+        if (gmPollInterval) clearInterval(gmPollInterval);
+        gmState.session = null;
+        window.forceCampaignSelector = true;
+        initGmView();
+    } catch (e) {
+        alert("Erro ao voltar: " + e.message);
+    }
 };
 
 // GM Actions
 async function updateFear(sessionId, amount) {
-    window.withGmLoading(async () => {
-        try {
-            await apiCall('gm.php?action=update_fear', 'POST', { session_id: sessionId, amount });
-            initGmView();
-        } catch (e) { console.error(e); }
-    });
+    try {
+        await apiCall('gm.php?action=update_fear', 'POST', { session_id: sessionId, amount });
+        initGmView();
+    } catch (e) { console.error(e); }
 }
 
 window.allowLevelUp = async function (charId) {
     if (!confirm("Tem certeza que deseja permitir que este personagem suba de nível?")) return;
-    window.withGmLoading(async () => {
-        try {
-            await apiCall('character.php?action=allow_level_up', 'POST', { character_id: charId });
-            initGmView();
-        } catch (e) {
-            alert("Erro ao autorizar subida de nível: " + e.message);
-        }
-    });
+    try {
+        await apiCall('character.php?action=allow_level_up', 'POST', { character_id: charId });
+        initGmView();
+    } catch (e) {
+        alert("Erro ao autorizar subida de nível: " + e.message);
+    }
 };
 
 async function overridePlayerStat(charId, field, value) {
     if (value === null || value === '') return;
-    window.withGmLoading(async () => {
-        try {
-            const finalVal = parseInt(value);
-            if (isNaN(finalVal)) {
-                alert('Valor inválido. Por favor, insira um número.');
-                return;
-            }
-            const payload = {
-                session_id: gmState.session.id,
-                character_id: charId,
-                field: field,
-                value: finalVal
-            };
-            await apiCall('gm.php?action=override_player_stat', 'POST', payload);
-
-            // Optimistic UI Update avoiding full reload
-            const char = gmState.characters.find(c => c.id === charId);
-            if (char) char[field] = finalVal; // Use finalVal here
-
-            // Let the polling or local update handle the re-render.
-        } catch (e) {
-            alert("Erro ao alterar stat: " + e.message);
+    try {
+        const finalVal = parseInt(value);
+        if (isNaN(finalVal)) {
+            alert('Valor inválido. Por favor, insira um número.');
+            return;
         }
-    });
+        const payload = {
+            session_id: gmState.session.id,
+            character_id: charId,
+            field: field,
+            value: finalVal
+        };
+        await apiCall('gm.php?action=override_player_stat', 'POST', payload);
+
+        // Optimistic UI Update avoiding full reload
+        const char = gmState.characters.find(c => c.id === charId);
+        if (char) char[field] = finalVal; // Use finalVal here
+
+        // Let the polling or local update handle the re-render.
+    } catch (e) {
+        alert("Erro ao alterar stat: " + e.message);
+    }
 }
 
 window.toggleShop = async function (sessionId, isOpen) {
-    window.withGmLoading(async () => {
-        try {
-            await apiCall('gm.php?action=toggle_shop', 'POST', {
-                session_id: sessionId,
-                is_open: isOpen
-            });
-            initGmView();
-        } catch (e) {
-            alert('Erro ao alterar mercado: ' + e.message);
-        }
-    });
+    try {
+        await apiCall('gm.php?action=toggle_shop', 'POST', {
+            session_id: sessionId,
+            is_open: isOpen
+        });
+        initGmView();
+    } catch (e) {
+        alert('Erro ao alterar mercado: ' + e.message);
+    }
 };
 
 function showAddAdversaryForm() {
@@ -611,53 +556,43 @@ async function submitAdversary(sessionId) {
 
     if (!name) return alert('Nome é obrigatório');
 
-    window.withGmLoading(async () => {
-        try {
-            await apiCall('gm.php?action=add_adversary', 'POST', {
-                session_id: sessionId, name, type, hp
-            });
-            initGmView();
-        } catch (e) { alert(e.message); }
-    });
+    try {
+        await apiCall('gm.php?action=add_adversary', 'POST', {
+            session_id: sessionId, name, type, hp
+        });
+        initGmView();
+    } catch (e) { alert(e.message); }
 }
 
 async function updateAdversary(id, field, value) {
     if (value < 0) value = 0;
-    window.withGmLoading(async () => {
-        try {
-            await apiCall('gm.php?action=update_adversary', 'POST', { id, field, value });
-            initGmView();
-        } catch (e) { console.error(e); }
-    });
+    try {
+        await apiCall('gm.php?action=update_adversary', 'POST', { id, field, value });
+        initGmView();
+    } catch (e) { console.error(e); }
 }
 
 async function deleteAdversary(id) {
     if (!confirm('Remover adversário?')) return;
-    window.withGmLoading(async () => {
-        try {
-            await apiCall('gm.php?action=delete_adversary', 'POST', { id });
-            initGmView();
-        } catch (e) { console.error(e); }
-    });
+    try {
+        await apiCall('gm.php?action=delete_adversary', 'POST', { id });
+        initGmView();
+    } catch (e) { console.error(e); }
 }
 
 async function approveCharacter(charId, sessionId) {
-    window.withGmLoading(async () => {
-        try {
-            await apiCall('gm.php?action=approve_character', 'POST', { character_id: charId, session_id: sessionId });
-            initGmView();
-        } catch (e) { alert(e.message); }
-    });
+    try {
+        await apiCall('gm.php?action=approve_character', 'POST', { character_id: charId, session_id: sessionId });
+        initGmView();
+    } catch (e) { alert(e.message); }
 }
 
 async function rejectCharacter(charId, sessionId) {
     if (!confirm('Tem certeza que deseja recusar a entrada deste jogador na campanha?')) return;
-    window.withGmLoading(async () => {
-        try {
-            await apiCall('gm.php?action=reject_character', 'POST', { character_id: charId, session_id: sessionId });
-            initGmView();
-        } catch (e) { alert(e.message); }
-    });
+    try {
+        await apiCall('gm.php?action=reject_character', 'POST', { character_id: charId, session_id: sessionId });
+        initGmView();
+    } catch (e) { alert(e.message); }
 }
 
 window.changeCharacterStatus = async function (charId, newStatus, sessionId) {
@@ -671,49 +606,48 @@ window.changeCharacterStatus = async function (charId, newStatus, sessionId) {
         return;
     }
 
-    window.withGmLoading(async () => {
-        try {
-            await apiCall('gm.php?action=update_character_status', 'POST', {
-                character_id: charId,
-                status: newStatus,
-                session_id: sessionId
-            });
+    try {
+        await apiCall('gm.php?action=update_character_status', 'POST', {
+            character_id: charId,
+            status: newStatus,
+            session_id: sessionId
+        });
 
-            // Optimistic update
-            const char = gmState.characters.find(c => c.id === charId);
-            if (char) char.session_status = newStatus;
+        // Optimistic update
+        const char = gmState.characters.find(c => c.id === charId);
+        if (char) char.session_status = newStatus;
 
-            initGmView();
-        } catch (e) {
-            alert("Erro ao alterar status: " + e.message);
-            initGmView();
-        }
-    });
+        initGmView();
+    } catch (e) {
+        alert("Erro ao alterar status: " + e.message);
+        initGmView();
+    }
 };
 
 window.viewingCharId = null;
 
 window.openGmCharacterSheet = async function (charId) {
     window.viewingCharId = charId;
-    window.withGmLoading(async () => {
-        try {
-            const char = await apiCall(`character.php?action=get_player_character&id=${charId}`);
-            const container = document.getElementById('gm-dynamic-area');
+    try {
+        const char = await apiCall(`character.php?action=get_player_character&id=${charId}`);
+        const container = document.getElementById('gm-dynamic-area');
 
-            container.innerHTML = `
-                <div id="gm-char-sheet-container"></div>
-            `;
+        container.innerHTML = `
+            <div style="position:absolute; top:1rem; left:1rem; cursor:pointer; color:var(--text-muted); font-size:1.5rem;" onclick="window.viewingCharId=null; initGmView()" title="Voltar para o Painel">
+            <i class="fas fa-arrow-left"></i>
+        </div>
+            <div id="gm-char-sheet-container"></div>
+        `;
 
-            // This is necessary so player.js functions like updateResource() affect this character
-            window.currentPlayingCharacter = char;
+        // This is necessary so player.js functions like updateResource() affect this character
+        window.currentPlayingCharacter = char;
 
-            // Render the exact same sheet the player sees, but with GM back behavior
-            window.renderCharacterSheet(char, document.getElementById('gm-char-sheet-container'), 'window.viewingCharId=null; window.forceDashboard=true; initGmView()');
+        // Render the exact same sheet the player sees
+        window.renderCharacterSheet(char, document.getElementById('gm-char-sheet-container'));
 
-        } catch (e) {
-            alert("Erro ao abrir a ficha do jogador: " + e.message);
-        }
-    });
+    } catch (e) {
+        alert("Erro ao abrir a ficha do jogador: " + e.message);
+    }
 };
 
 // =====================================
@@ -864,20 +798,18 @@ window.filterGmCatalog = function () {
 }
 
 async function toggleEquipmentVisibility(itemId, isVisible) {
-    window.withGmLoading(async () => {
-        try {
-            await apiCall('equipment.php?action=toggle_visibility', 'POST', {
-                id: itemId,
-                is_visible: isVisible ? 1 : 0
-            });
-            // Update local state without full reload
-            const item = gmState.equipment.find(e => e.id === itemId);
-            if (item) item.is_visible = isVisible;
-        } catch (e) {
-            alert("Erro ao alterar visibilidade: " + e.message);
-            initGmView(); // Reload to fix sync out of state
-        }
-    });
+    try {
+        await apiCall('equipment.php?action=toggle_visibility', 'POST', {
+            id: itemId,
+            is_visible: isVisible ? 1 : 0
+        });
+        // Update local state without full reload
+        const item = gmState.equipment.find(e => e.id === itemId);
+        if (item) item.is_visible = isVisible;
+    } catch (e) {
+        alert("Erro ao alterar visibilidade: " + e.message);
+        initGmView(); // Reload to fix sync out of state
+    }
 }
 
 window.toggleBulkVisibility = async function (isVisible) {
@@ -896,19 +828,17 @@ window.toggleBulkVisibility = async function (isVisible) {
 
     if (!confirm(`Deseja ${isVisible ? 'LIBERAR' : 'OCULTAR'} os ${idsToUpdate.length} itens listados atualmente?`)) return;
 
-    window.withGmLoading(async () => {
-        try {
-            await apiCall('equipment.php?action=toggle_visibility_bulk', 'POST', {
-                ids: idsToUpdate,
-                is_visible: isVisible ? 1 : 0
-            });
+    try {
+        await apiCall('equipment.php?action=toggle_visibility_bulk', 'POST', {
+            ids: idsToUpdate,
+            is_visible: isVisible ? 1 : 0
+        });
 
-            // Render again to reflect changes visually
-            initGmView();
-        } catch (e) {
-            alert("Erro ao alterar visibilidade em massa: " + e.message);
-        }
-    });
+        // Render again to reflect changes visually
+        initGmView();
+    } catch (e) {
+        alert("Erro ao alterar visibilidade em massa: " + e.message);
+    }
 };
 
 function toggleItemDetails(id) {
@@ -968,15 +898,13 @@ async function saveGmItem() {
     const payload = { id, name, category, tier, cost_base, description, data: parsedData };
     const action = id ? 'update' : 'create';
 
-    window.withGmLoading(async () => {
-        try {
-            await apiCall(`equipment.php?action=${action}`, 'POST', payload);
-            document.getElementById('gm-item-modal').style.display = 'none';
-            initGmView(); // Reload catalog
-        } catch (e) {
-            alert("Erro ao salvar: " + e.message);
-        }
-    });
+    try {
+        await apiCall(`equipment.php?action=${action}`, 'POST', payload);
+        document.getElementById('gm-item-modal').style.display = 'none';
+        initGmView(); // Reload catalog
+    } catch (e) {
+        alert("Erro ao salvar: " + e.message);
+    }
 }
 
 async function deleteGmItem() {
@@ -985,15 +913,13 @@ async function deleteGmItem() {
 
     if (!confirm("Tem certeza que deseja desintegrar este item do Armazém? Ele desaparecerá das opções dos jogadores.")) return;
 
-    window.withGmLoading(async () => {
-        try {
-            await apiCall('equipment.php?action=delete', 'POST', { id });
-            document.getElementById('gm-item-modal').style.display = 'none';
-            initGmView();
-        } catch (e) {
-            alert("Erro ao excluir: " + e.message);
-        }
-    });
+    try {
+        await apiCall('equipment.php?action=delete', 'POST', { id });
+        document.getElementById('gm-item-modal').style.display = 'none';
+        initGmView();
+    } catch (e) {
+        alert("Erro ao excluir: " + e.message);
+    }
 }
 
 // Bestiary / NPCs Tab
@@ -1143,7 +1069,8 @@ function openBestiaryModal(b = null) {
         document.getElementById('gm-bestiary-motifs').value = b.motivations || '';
         document.getElementById('gm-bestiary-desc').value = b.description || '';
 
-        // Avatar fields removed for performance
+        document.getElementById('gm-bestiary-avatar-url').value = b.avatar || '';
+        document.getElementById('gm-bestiary-avatar-img').src = b.avatar || 'img/default_avatar.png';
 
         if (b.attack) {
             document.getElementById('gm-atk-mod').value = b.attack.modifier || '';
@@ -1167,7 +1094,8 @@ function openBestiaryModal(b = null) {
         delBtn.style.display = 'none';
         duplicateBtn.style.display = 'none';
 
-        // Avatar fields removed for performance
+        document.getElementById('gm-bestiary-avatar-url').value = '';
+        document.getElementById('gm-bestiary-avatar-img').src = '';
     }
 
     toggleHordeMultiplier();
@@ -1231,30 +1159,26 @@ async function saveBestiaryTemplate() {
 
     console.log("PAYLOAD INDO PRO SERVIDOR:", payload);
 
-    window.withGmLoading(async () => {
-        try {
-            const action = id ? 'update_bestiary_template' : 'create_bestiary_template';
-            await apiCall(`gm.php?action=${action}`, 'POST', payload);
-            document.getElementById('gm-bestiary-modal').style.display = 'none';
-            initGmView(); // Refresh dashboard
-        } catch (e) {
-            alert("Erro ao salvar: " + e.message);
-        }
-    });
+    try {
+        const action = id ? 'update_bestiary_template' : 'create_bestiary_template';
+        await apiCall(`gm.php?action=${action}`, 'POST', payload);
+        document.getElementById('gm-bestiary-modal').style.display = 'none';
+        initGmView(); // Refresh dashboard
+    } catch (e) {
+        alert("Erro ao salvar: " + e.message);
+    }
 }
 
 async function deleteBestiaryTemplate() {
     if (!confirm("Excluir esta ficha permanentemente do banco?")) return;
     const id = document.getElementById('gm-bestiary-id').value;
-    window.withGmLoading(async () => {
-        try {
-            await apiCall('gm.php?action=delete_bestiary_template', 'POST', { id });
-            document.getElementById('gm-bestiary-modal').style.display = 'none';
-            initGmView();
-        } catch (e) {
-            alert("Erro: " + e.message);
-        }
-    });
+    try {
+        await apiCall('gm.php?action=delete_bestiary_template', 'POST', { id });
+        document.getElementById('gm-bestiary-modal').style.display = 'none';
+        initGmView();
+    } catch (e) {
+        alert("Erro: " + e.message);
+    }
 }
 
 window.saveBestiaryTemplate = saveBestiaryTemplate;
@@ -1370,22 +1294,18 @@ async function createEncounter(sessionId) {
     const name = document.getElementById('new-encounter-name').value.trim();
     if (!name) return alert("Digite um nome para o grupo.");
 
-    window.withGmLoading(async () => {
-        try {
-            await apiCall('gm.php?action=create_encounter', 'POST', { session_id: sessionId, name });
-            initGmView();
-        } catch (e) { alert(e.message); }
-    });
+    try {
+        await apiCall('gm.php?action=create_encounter', 'POST', { session_id: sessionId, name });
+        initGmView();
+    } catch (e) { alert(e.message); }
 }
 
 async function deleteEncounter(id, name) {
     if (!confirm(`Remover permanentemente o grupo '${name}' da sessão? Oponentes dentro dele ficarão soltos na cena.`)) return;
-    window.withGmLoading(async () => {
-        try {
-            await apiCall('gm.php?action=delete_encounter', 'POST', { id });
-            initGmView();
-        } catch (e) { alert(e.message); }
-    });
+    try {
+        await apiCall('gm.php?action=delete_encounter', 'POST', { id });
+        initGmView();
+    } catch (e) { alert(e.message); }
 }
 
 function openAddAdvPicker(targetId = null, isFromBestiary = false) {
@@ -1491,15 +1411,13 @@ async function addAdversaryFromTemplate(templateId, encounterId) {
         token: tpl.token
     };
 
-    window.withGmLoading(async () => {
-        try {
-            await apiCall('gm.php?action=add_adversary', 'POST', payload);
-            document.getElementById('gm-adv-picker-modal').style.display = 'none';
-            initGmView();
-            // Switch to session tab to see the change
-            switchGmTab('session');
-        } catch (e) { alert("Erro ao inserir: " + e.message); }
-    });
+    try {
+        await apiCall('gm.php?action=add_adversary', 'POST', payload);
+        document.getElementById('gm-adv-picker-modal').style.display = 'none';
+        initGmView();
+        // Switch to session tab to see the change
+        switchGmTab('session');
+    } catch (e) { alert("Erro ao inserir: " + e.message); }
 }
 
 function openBestiaryModalFromTemplate(templateId) {
@@ -1514,5 +1432,4 @@ window.deleteEncounter = deleteEncounter;
 window.openAddAdvPicker = openAddAdvPicker;
 window.addAdversaryFromTemplate = addAdversaryFromTemplate;
 window.openBestiaryModalFromTemplate = openBestiaryModalFromTemplate;
-window.initGmView = initGmView;
 

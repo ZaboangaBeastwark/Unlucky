@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 errorDiv.textContent = 'Carregando...';
                 const res = await apiCall('auth.php?action=login', 'POST', { username: user, password: pass });
                 window.appState.user = res.user;
+                localStorage.setItem('unlucky_user_cache', JSON.stringify(res.user));
                 initializeUserView();
             } catch (err) {
                 errorDiv.textContent = err.message;
@@ -47,6 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 errorDiv.textContent = 'Carregando...';
                 const res = await apiCall('auth.php?action=register', 'POST', { username: user, password: pass, role });
                 window.appState.user = res.user;
+                localStorage.setItem('unlucky_user_cache', JSON.stringify(res.user));
                 initializeUserView();
             } catch (err) {
                 errorDiv.textContent = err.message;
@@ -57,10 +59,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Logout logic made global for reliability with dynamic elements
     window.handleLogout = async () => {
         try {
-            await apiCall('auth.php?action=logout', 'POST');
-            window.appState.user = null;
+            // Stop ALL active polling immediately
             if (typeof stopLogPolling === 'function') stopLogPolling();
-            if (typeof gmPollInterval !== 'undefined') clearInterval(gmPollInterval);
+            if (typeof gmPollInterval !== 'undefined' && gmPollInterval) clearInterval(gmPollInterval);
+            if (typeof gmSyncInterval !== 'undefined' && gmSyncInterval) clearInterval(gmSyncInterval);
+            
+            // Wait for the logout API call to finish before shifting view
+            await apiCall('auth.php?action=logout', 'POST');
+            
+            localStorage.removeItem('unlucky_user_cache');
+            window.appState.user = null;
             showView('view-auth');
         } catch (err) {
             console.error('Logout failed', err);

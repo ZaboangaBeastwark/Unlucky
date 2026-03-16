@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mesa do Mestre - Daggerheart</title>
+    <link rel="stylesheet" href="vtt.css?v=30">
+    <style>
+        body {
+            background: #0a0a0c;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+        }
+
+        #control-layout {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        #sidebar {
+            background: rgba(18, 18, 23, 0.95);
+            border-right: 1px solid var(--glass-border);
+            padding: 20px;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+
+        #preview-area {
+            position: relative;
+            flex: 1;
+            background: #000;
+            overflow: hidden;
+        }
+
+        /* Mirroring VTT structure for the preview area */
+        #vtt-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: block !important;
+            top: 0;
+            left: 0;
+            pointer-events: auto;
+        }
+
+        #vtt-board {
+            cursor: crosshair;
+        }
+
+        #vtt-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1001;
+            pointer-events: auto;
+        }
+
+        #vtt-tracker {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1001;
+            pointer-events: auto;
+        }
+
+        .section-title {
+            font-size: 0.7rem;
+            color: var(--vtt-accent-gold);
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+            margin-top: 20px;
+        }
+
+        #beastiary-drag {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .header-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Cinzel:wght@400;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div id="control-layout">
+        <div id="sidebar">
+            <div class="header-controls">
+                <button class="vtt-btn" onclick="window.location.href='index.html'"><i
+                        class="fa-solid fa-arrow-left"></i> SAIR</button>
+                <button class="vtt-btn primary" onclick="window.open('vtt.html?view=display', '_blank')"><i
+                        class="fa-solid fa-desktop"></i> TRANSMITIR</button>
+            </div>
+
+            <h3 style="color:var(--vtt-accent-gold); margin-bottom:20px;">MESA DO MESTRE</h3>
+
+            <div class="section-title">CENAS ATIVAS</div>
+            <div id="scene-list"
+                style="max-height: 200px; overflow-y: auto; display:flex; flex-direction:column; gap:8px; margin-bottom:15px;">
+            </div>
+            <button class="vtt-btn" style="width:100%;" onclick="vtt.openSceneModal()"><i class="fa-solid fa-plus"></i>
+                NOVA CENA</button>
+            <button id="btn-broadcast-scene" class="vtt-btn"
+                style="width:100%; margin-top:10px; background:var(--vtt-accent); color:black; display:none;"
+                onclick="vtt.broadcastCurrentScene()">
+                <i class="fa-solid fa-rss"></i> MOSTRAR PARA JOGADORES
+            </button>
+            <p id="preview-indicator"
+                style="font-size:0.6rem; color:var(--vtt-accent-gold); text-align:center; margin-top:5px; display:none;">
+                MODO PREVIEW ATIVO</p>
+
+            <div class="section-title">BIBLIOTECA DE TOKENS</div>
+            <div id="beastiary-drag"></div>
+
+            <div class="section-title">DETALHES DA SESSÃO</div>
+            <p style="font-size: 0.7rem; color: #666; font-style: italic;">Arraste tokens da biblioteca para o mapa para
+                posicioná-los.</p>
+        </div>
+
+        <div id="preview-area">
+            <!-- Independent Camera View for GM -->
+            <div id="vtt-container">
+                <div id="vtt-board">
+                    <div id="vtt-background-layer"></div>
+                    <canvas id="vtt-grid"></canvas>
+                    <div id="vtt-token-layer"></div>
+                    <div id="vtt-ruler"></div>
+                </div>
+            </div>
+
+            <!-- Floating Trackers (GM view) -->
+            <div id="vtt-tracker" class="glass-panel">
+                <div id="action-tracker-display" style="display:flex; gap:10px;"></div>
+            </div>
+
+            <!-- VTT Global Controls -->
+            <div id="vtt-controls" class="glass-panel" style="display:flex; gap:10px;">
+                <button class="vtt-btn" id="btn-grid-toggle" title="Alternar Grid (G)" onclick="vtt.toggleGrid()"><i
+                        class="fa-solid fa-border-all"></i></button>
+                <button class="vtt-btn" id="btn-snap-toggle" title="Snap to Grid"
+                    onclick="vtt.state.snapToGrid = !vtt.state.snapToGrid"><i class="fa-solid fa-magnet"></i></button>
+                <button class="vtt-btn" onclick="vtt.state.camera.reset()" title="Resetar Câmera"><i
+                        class="fa-solid fa-crosshairs"></i></button>
+            </div>
+
+            <!-- Token Specific Controls (Shown when token selected) -->
+            <div id="vtt-token-controls" class="glass-panel"
+                style="display:none; gap:10px; border-color: var(--vtt-accent-gold);">
+                <span id="selected-token-name"
+                    style="font-size: 0.7rem; color: var(--vtt-accent-gold); margin-right: 5px; align-self: center;"></span>
+                <button class="vtt-btn" onclick="vtt.toggleTokenVisibility(vtt.state.selectedTokenId)"
+                    title="Visibilidade (V)"><i class="fa-solid fa-eye-slash"></i></button>
+                <button class="vtt-btn" onclick="vtt.updateTokenScale(vtt.state.selectedTokenId, 0.1)"
+                    title="Aumentar (+)"><i class="fa-solid fa-plus"></i></button>
+                <button class="vtt-btn" onclick="vtt.updateTokenScale(vtt.state.selectedTokenId, -0.1)"
+                    title="Diminuir (-)"><i class="fa-solid fa-minus"></i></button>
+                <button class="vtt-btn delete" onclick="vtt.deleteToken(vtt.state.selectedTokenId)"
+                    title="Deletar (Del)"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="scene-modal" class="modal-overlay"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; z-index:2000; align-items:center; justify-content:center; background:rgba(0,0,0,0.8);">
+        <div class="glass-panel" style="width:400px; border:1px solid var(--vtt-accent-gold);">
+            <h3>Configurar Ambiente</h3>
+            <div style="display:flex; flex-direction:column; gap:15px; margin:20px 0;">
+                <input type="text" id="scene-name" placeholder="Nome da Cena"
+                    style="width:100%; box-sizing:border-box;">
+                <div style="display:flex; gap:5px;">
+                    <input type="text" id="scene-bg" placeholder="URL da Imagem/Vídeo" style="flex:1;">
+                    <button class="vtt-btn" onclick="document.getElementById('scene-upload').click()"><i
+                            class="fa-solid fa-upload"></i></button>
+                    <input type="file" id="scene-upload" style="display:none;" onchange="vtt.uploadBackground(this)">
+                </div>
+                <label style="font-size:0.8rem;"><input type="checkbox" id="scene-active" checked> Cena Ativa</label>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:10px;">
+                <button class="vtt-btn"
+                    onclick="document.getElementById('scene-modal').style.display='none'">Fechar</button>
+                <button class="vtt-btn primary" onclick="vtt.saveScene()">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="vtt-loading-overlay"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:3000; flex-direction:column; align-items:center; justify-content:center;">
+        <div class="premium-spinner"></div>
+        <p id="loading-text" style="color:var(--vtt-accent-gold); margin-top:20px;">CARREGANDO...</p>
+    </div>
+
+    <script src="js/api.js?v=32"></script>
+    <script src="js/vtt.js?v=34"></script>
+</body>
+
+</html>

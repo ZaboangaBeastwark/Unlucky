@@ -61,7 +61,7 @@ function logAudit($pdo, $session_id, $character_id, $character_name, $action_typ
     try {
         $user_id = $_SESSION['user_id'];
         $actor_name = $_SESSION['username'] ?? 'Desconhecido';
-        $user_role = $_SESSION['role'] ?? 'jogador';
+        $user_role = $_SESSION['role'] ?? 'player';
 
         // Fallbacks if character values aren't provided straight away but we know the session
         $session_name = "Sessão $session_id";

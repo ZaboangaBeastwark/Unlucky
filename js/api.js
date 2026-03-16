@@ -9,8 +9,12 @@ const API_BASE = 'api/';
  * @param {object} data - JSON payload
  * @returns {Promise<object>}
  */
-async function apiCall(endpoint, method = 'GET', data = null) {
-    const url = API_BASE + endpoint;
+async function apiRequest(endpoint, method = 'GET', data = null, params = null) {
+    let url = API_BASE + endpoint;
+    if (params) {
+        const query = new URLSearchParams(params).toString();
+        url += '?' + query;
+    }
     const options = {
         method,
         cache: 'no-store',
@@ -47,3 +51,6 @@ async function apiCall(endpoint, method = 'GET', data = null) {
         throw error;
     }
 }
+
+// Alias for backward compatibility
+const apiCall = apiRequest;

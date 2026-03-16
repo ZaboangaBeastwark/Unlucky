@@ -36,9 +36,12 @@ if ($method === 'POST') {
         $stmt = $pdo->prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)');
         if ($stmt->execute([$username, $hash, $role])) {
             $userId = $pdo->lastInsertId();
+            // Re-open session to write login data (session was closed after reading in session.php)
+            session_start();
             $_SESSION['user_id'] = $userId;
             $_SESSION['role'] = $role;
             $_SESSION['username'] = $username;
+            session_write_close();
             jsonResponse(['message' => 'Registration successful', 'user' => ['id' => $userId, 'username' => $username, 'role' => $role]]);
         } else {
             jsonResponse(['error' => 'Failed to register user'], 500);
@@ -56,14 +59,18 @@ if ($method === 'POST') {
         $user = $stmt->fetch();
 
         if ($user && password_verify($password, $user['password_hash'])) {
+            // Re-open session to write login data
+            session_start();
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['role'] = $user['role'];
             $_SESSION['username'] = $user['username'];
+            session_write_close();
             jsonResponse(['message' => 'Login successful', 'user' => ['id' => $user['id'], 'username' => $user['username'], 'role' => $user['role']]]);
         } else {
             jsonResponse(['error' => 'Invalid credentials'], 401);
         }
     } elseif ($action === 'logout') {
+        session_start();
         session_destroy();
         jsonResponse(['message' => 'Logout successful']);
     }

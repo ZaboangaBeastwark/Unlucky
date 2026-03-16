@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VTT - Daggerheart Campaign</title>
+    <link rel="stylesheet" href="vtt.css?v=25">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Cinzel:wght@400;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div id="vtt-container">
+        <div id="vtt-board">
+            <div id="vtt-background-layer"></div>
+            <canvas id="vtt-grid"></canvas>
+            <div id="vtt-token-layer"></div>
+            <div id="vtt-ruler"></div>
+        </div>
+    </div>
+
+    <!-- UI Overlay -->
+    <div class="vtt-ui" style="width:100%; height:100%; top:0; left:0; pointer-events:none;">
+        <!-- Top Left: Back Button -->
+        <div style="position:fixed; top:20px; left:20px; pointer-events:auto; z-index:100; display:flex; gap:10px;">
+            <button class="vtt-btn glass-panel" onclick="window.location.href='index.html'"
+                style="display:flex; align-items:center; gap:8px; padding: 10px 15px;">
+                <i class="fa-solid fa-arrow-left"></i> Voltar ao Painel
+            </button>
+            <button class="vtt-btn glass-panel gm-only" onclick="window.location.href='vtt_control.html'"
+                style="display:flex; align-items:center; gap:8px; padding: 10px 15px; border-color:var(--vtt-accent-gold);">
+                <i class="fa-solid fa-gears"></i> Painel de Controle
+            </button>
+        </div>
+
+        <!-- Top Tracker: Initiative / Action Tracker -->
+        <div id="vtt-tracker" class="glass-panel">
+            <div class="panel-section" style="display:flex; align-items:center; gap:1rem;">
+                <span id="tracker-status">Exploração</span>
+                <div style="width:2px; height:20px; background:var(--glass-border);"></div>
+                <div id="action-tracker-display" style="display:flex; gap:5px;">
+                    <!-- Tokens will be injected here -->
+                    <i class="fa-solid fa-circle" style="color:#aaa;"></i>
+                    <i class="fa-solid fa-circle" style="color:#aaa;"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- GM HUD: Left Side (Only for GM) -->
+        <div id="gm-panel" class="glass-panel" style="display:none;">
+            <div class="panel-header">
+                <h3>Mestre</h3>
+                <button class="vtt-btn" id="toggle-gm-panel"><i class="fa-solid fa-chevron-left"></i></button>
+            </div>
+
+            <div class="panel-section">
+                <h4>Cenas da Campanha</h4>
+                <div id="scene-list"
+                    style="max-height: 200px; overflow-y: auto; margin-bottom: 0.8rem; display:flex; flex-direction:column; gap:5px;">
+                    <!-- Scenes injected here -->
+                </div>
+                <button class="vtt-btn primary" style="width:100%; height:35px; font-size:0.8rem;"
+                    onclick="vtt.openSceneModal()"><i class="fa-solid fa-plus"></i> CRIAR NOVA CENA</button>
+
+                <button id="btn-broadcast-scene" class="vtt-btn"
+                    style="width:100%; margin-top:10px; background:var(--vtt-accent); color:black; display:none;"
+                    onclick="vtt.broadcastCurrentScene()">
+                    <i class="fa-solid fa-rss"></i> MOSTRAR PARA JOGADORES
+                </button>
+                <p id="preview-indicator"
+                    style="font-size:0.6rem; color:var(--vtt-accent-gold); text-align:center; margin-top:5px; display:none;">
+                    <i class="fa-solid fa-user-secret"></i> MODO PREVIEW (JOGADORES NÃO ESTÃO VENDO ISTO)
+                </p>
+            </div>
+
+            <div class="panel-section">
+                <h4>Biblioteca</h4>
+                <div id="beastiary-drag"
+                    style="max-height: 200px; overflow-y: auto; display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
+                    <!-- Monsters injected here -->
+                </div>
+            </div>
+
+        </div>
+
+        <div id="vtt-controls" class="glass-panel" style="display:flex; gap:10px;">
+            <button class="vtt-btn" id="btn-grid-toggle" title="Alternar Grid (G)"><i
+                    class="fa-solid fa-border-all"></i></button>
+            <button class="vtt-btn" id="btn-snap-toggle" title="Snap to Grid"><i
+                    class="fa-solid fa-magnet"></i></button>
+            <button class="vtt-btn" onclick="vtt.camera.reset()" title="Centralizar Câmera"><i
+                    class="fa-solid fa-crosshairs"></i></button>
+            <div style="width:1px; height:20px; background:var(--glass-border); align-self:center;"></div>
+            <button class="vtt-btn" style="color:#ff4d4d" onclick="window.location.href='index.html'"
+                title="Sair do VTT"><i class="fa-solid fa-right-from-bracket"></i></button>
+        </div>
+
+        <!-- Version Label -->
+        <div
+            style="position:fixed; bottom:5px; right:10px; font-size:10px; color:rgba(255,255,255,0.2); pointer-events:none;">
+            v1.2.0-multicenas
+        </div>
+    </div>
+
+    <!-- Modais -->
+    <div id="scene-modal" class="modal-overlay"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:1000; display:flex; align-items:center; justify-content:center;">
+        <div class="glass-panel" style="width:450px; pointer-events:auto; border: 1px solid var(--vtt-accent-gold);">
+            <h3>Configurar Ambiente</h3>
+            <p style="font-size: 0.8rem; color: var(--vtt-text-muted); margin-bottom: 1.5rem;">Crie uma nova cena para
+                sua campanha.</p>
+
+            <div style="display:flex; flex-direction:column; gap:15px; margin:1rem 0;">
+                <div>
+                    <label
+                        style="font-size: 0.7rem; color: var(--vtt-accent-gold); display: block; margin-bottom: 5px;">NOME
+                        DA CENA</label>
+                    <input type="text" id="scene-name" placeholder="Ex: Templo Esquecido"
+                        style="width: 100%; box-sizing: border-box;">
+                </div>
+
+                <div>
+                    <label
+                        style="font-size: 0.7rem; color: var(--vtt-accent-gold); display: block; margin-bottom: 5px;">IMAGEM
+                        OU VÍDEO (LINK OU YOUTUBE)</label>
+                    <div style="display:flex; gap:8px;">
+                        <input type="text" id="scene-bg" placeholder="URL direta ou link do YouTube" style="flex:1;">
+                        <button class="vtt-btn" onclick="document.getElementById('scene-upload').click()"
+                            title="Fazer Upload do PC">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                        </button>
+                        <input type="file" id="scene-upload" style="display:none;" onchange="vtt.uploadBackground(this)"
+                            accept="image/*,video/mp4,video/webm">
+                    </div>
+                </div>
+
+                <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size: 0.9rem;">
+                    <input type="checkbox" id="scene-active" checked> Tornar esta a cena ativa para todos
+                </label>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:12px; margin-top: 1rem;">
+                <button class="vtt-btn" style="padding: 0 20px;"
+                    onclick="document.getElementById('scene-modal').style.display='none'">Cancelar</button>
+                <button class="vtt-btn primary" style="padding: 0 30px; height: 45px;"
+                    onclick="vtt.saveScene()">Avançar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="vtt-loading-overlay"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:2000; flex-direction:column; align-items:center; justify-content:center; backdrop-filter: blur(5px);">
+        <div class="premium-spinner"></div>
+        <p id="loading-text"
+            style="color:var(--vtt-accent-gold); font-family:var(--premium-font); margin-top:15px; letter-spacing:2px;">
+            CARREGANDO MÍDIA...</p>
+    </div>
+
+    <script src="js/api.js?v=25"></script>
+    <script src="js/vtt.js?v=25"></script>
+</body>
+
+</html>

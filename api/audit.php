@@ -44,16 +44,21 @@ if ($method === 'GET' && $action === 'get_logs') {
     $params = [':session_id' => $session_id];
 
     if ($search) {
-        $sql .= " AND (description LIKE :search OR actor_name LIKE :search OR character_name LIKE :search) ";
-        $params[':search'] = "%$search%";
+        $sql .= " AND (description LIKE :search1 OR actor_name LIKE :search2 OR character_name LIKE :search3) ";
+        $params[':search1'] = "%$search%";
+        $params[':search2'] = "%$search%";
+        $params[':search3'] = "%$search%";
     }
     if ($type_filter) {
         $sql .= " AND action_type = :action_type ";
         $params[':action_type'] = $type_filter;
     }
     if ($role_filter) {
-        $sql .= " AND user_role = :user_role ";
-        $params[':user_role'] = $role_filter;
+        // Map Portuguese UI value to likely DB value if needed
+        $db_role = ($role_filter === 'jogador') ? 'player' : $role_filter;
+        $sql .= " AND (user_role = :user_role OR user_role = :user_role_alt) ";
+        $params[':user_role'] = $db_role;
+        $params[':user_role_alt'] = ($db_role === 'player') ? 'jogador' : $db_role;
     }
 
     $sql .= " ORDER BY created_at DESC LIMIT :limit OFFSET :offset";
@@ -75,16 +80,20 @@ if ($method === 'GET' && $action === 'get_logs') {
     $countSql = "SELECT COUNT(*) FROM audit_logs WHERE session_id = :session_id ";
     $countParams = [':session_id' => $session_id];
     if ($search) {
-        $countSql .= " AND (description LIKE :search OR actor_name LIKE :search OR character_name LIKE :search) ";
-        $countParams[':search'] = "%$search%";
+        $countSql .= " AND (description LIKE :search1 OR actor_name LIKE :search2 OR character_name LIKE :search3) ";
+        $countParams[':search1'] = "%$search%";
+        $countParams[':search2'] = "%$search%";
+        $countParams[':search3'] = "%$search%";
     }
     if ($type_filter) {
         $countSql .= " AND action_type = :type ";
         $countParams[':type'] = $type_filter;
     }
     if ($role_filter) {
-        $countSql .= " AND user_role = :role ";
-        $countParams[':role'] = $role_filter;
+        $db_role = ($role_filter === 'jogador') ? 'player' : $role_filter;
+        $countSql .= " AND (user_role = :role OR user_role = :role_alt) ";
+        $countParams[':role'] = $db_role;
+        $countParams[':role_alt'] = ($db_role === 'player') ? 'jogador' : $db_role;
     }
 
     $cStmt = $pdo->prepare($countSql);

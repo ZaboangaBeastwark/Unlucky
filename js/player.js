@@ -135,17 +135,26 @@ window.openCharacterSheet = function (char) {
 
     // Initialize real-time polling to sync with GM changes
     if (window.gmSyncInterval) clearInterval(window.gmSyncInterval);
+    window.gmSyncInProgress = false;
 
     if (char.session_id) {
         window.gmSyncInterval = setInterval(async () => {
             if (!window.currentPlayingCharacter) return clearInterval(window.gmSyncInterval);
+            if (window.gmSyncInProgress) return;
+            
+            window.gmSyncInProgress = true;
             try {
-                // To avoid deep comparisons, fetch the raw JSON and compare the string representation.
-                const rawRes = await fetch(`${API_BASE}character.php?action=get_player_character&id=${char.id}`, { cache: 'no-store' });
+                const currentLastLogId = window.lastLogId || 0;
+                // Fetch character sync + logs in one shot
+                const rawRes = await fetch(`${API_BASE}character.php?action=get_player_character&id=${char.id}&last_log_id=${currentLastLogId}`, { cache: 'no-store' });
                 const clonedChar = await rawRes.json();
 
-                // Remove dynamic properties that shouldn't trigger a re-render from the comparison
-                // Since php json_encode might change ordering or types, comparing strings of carefully scrubbed objects is best.
+                // Process logs
+                if (clonedChar.logs && typeof window.processNewLogs === 'function') {
+                    window.processNewLogs(clonedChar.logs);
+                }
+
+                // Simple check: if different and not error, update and re-render
                 const c1 = JSON.stringify(window.currentPlayingCharacter);
                 const c2 = JSON.stringify(clonedChar);
 
@@ -166,10 +175,12 @@ window.openCharacterSheet = function (char) {
                 }
             } catch (e) {
                 console.error("Erro no polling de sincronização do GM:", e);
+            } finally {
+                window.gmSyncInProgress = false;
             }
-        }, 2000);
+        }, 5000); // 5 seconds for balance and consolidated performance
     }
-};
+}
 
 window.startCharacterCreation = function () {
     if (window.gmSyncInterval) clearInterval(window.gmSyncInterval);
@@ -768,9 +779,9 @@ window.renderCharacterSheet = function (char, container, backAction = null) {
     // Auto-detect GM view if not explicitly provided
     if (!backAction) {
         if (window.appState && window.appState.user && window.appState.user.role === 'gm') {
-            backAction = 'window.viewingCharId=null; window.forceDashboard=true; if(typeof initGmView === "function") initGmView();';
+            backAction = "window.viewingCharId=null; window.forceDashboard=true; if(typeof initGmView === 'function') initGmView();";
         } else {
-            backAction = 'if(typeof initPlayerView === "function") initPlayerView();';
+            backAction = "if(typeof initPlayerView === 'function') initPlayerView();";
         }
     }
 
@@ -1016,7 +1027,7 @@ window.renderCharacterSheet = function (char, container, backAction = null) {
         <div class="sheet-grid">
             <div class="sheet-col">
                 <div class="glass-panel sheet-section" style="text-align: center; position:relative;">
-                    <div style="position:absolute; top:1rem; left:1rem; cursor:pointer; color:var(--text-muted); font-size:1.5rem;" onclick="${backAction}" title="Voltar">
+                    <div style="position:absolute; top:1rem; left:1rem; cursor:pointer; color:var(--text-muted); font-size:1.5rem;" onclick="${backAction.replace(/"/g, '&quot;')}" title="Voltar">
                         <i class="fas fa-arrow-left"></i>
                     </div>
                     
@@ -1293,96 +1304,128 @@ window.showItemDetails = function (encodedItem) {
 // Core Interactive Handlers
 // -------------------------------------------------------------
 window.equipItem = async function (charId, bagIndex) {
-    try {
-        let charToUpdate = window.currentPlayingCharacter && window.currentPlayingCharacter.id == charId ? window.currentPlayingCharacter : (window.chars ? window.chars.find(c => c.id == charId) : null);
-        if (!charToUpdate) throw new Error("Character instance not found.");
+    const runUpdate = async () => {
+        try {
+            let charToUpdate = window.currentPlayingCharacter && window.currentPlayingCharacter.id == charId ? window.currentPlayingCharacter : (window.chars ? window.chars.find(c => c.id == charId) : null);
+            if (!charToUpdate) throw new Error("Character instance not found.");
 
-        if (!Array.isArray(charToUpdate.inventory.equipped)) {
-            charToUpdate.inventory.equipped = charToUpdate.inventory.equipped ? Object.values(charToUpdate.inventory.equipped) : [];
+            if (!Array.isArray(charToUpdate.inventory.equipped)) {
+                charToUpdate.inventory.equipped = charToUpdate.inventory.equipped ? Object.values(charToUpdate.inventory.equipped) : [];
+            }
+            if (!Array.isArray(charToUpdate.inventory.bag)) {
+                charToUpdate.inventory.bag = charToUpdate.inventory.bag ? Object.values(charToUpdate.inventory.bag) : [];
+            }
+
+            const item = charToUpdate.inventory.bag[bagIndex];
+            if (!item) throw new Error("Item not found in bag.");
+
+            charToUpdate.inventory.bag.splice(bagIndex, 1);
+            charToUpdate.inventory.equipped.push(item);
+
+            await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: charToUpdate.inventory });
+            const container = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
+            window.renderCharacterSheet(charToUpdate, container);
+        } catch (e) {
+            console.error(e);
+            alert("Erro ao equipar: " + e.message);
         }
-        if (!Array.isArray(charToUpdate.inventory.bag)) {
-            charToUpdate.inventory.bag = charToUpdate.inventory.bag ? Object.values(charToUpdate.inventory.bag) : [];
-        }
+    };
 
-        const item = charToUpdate.inventory.bag[bagIndex];
-        if (!item) throw new Error("Item not found in bag.");
-
-        charToUpdate.inventory.bag.splice(bagIndex, 1);
-        charToUpdate.inventory.equipped.push(item);
-
-        await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: charToUpdate.inventory });
-        const container = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
-        window.renderCharacterSheet(charToUpdate, container);
-    } catch (e) {
-        console.error(e);
-        alert("Erro ao equipar: " + e.message);
+    if (window.appState && window.appState.user && window.appState.user.role === 'gm' && typeof window.withGmLoading === 'function') {
+        window.withGmLoading(runUpdate);
+    } else {
+        runUpdate();
     }
 };
 
 window.unequipItem = async function (charId, equipIndex) {
-    try {
-        let charToUpdate = window.currentPlayingCharacter && window.currentPlayingCharacter.id == charId ? window.currentPlayingCharacter : (window.chars ? window.chars.find(c => c.id == charId) : null);
-        if (!charToUpdate) throw new Error("Character instance not found.");
+    const runUpdate = async () => {
+        try {
+            let charToUpdate = window.currentPlayingCharacter && window.currentPlayingCharacter.id == charId ? window.currentPlayingCharacter : (window.chars ? window.chars.find(c => c.id == charId) : null);
+            if (!charToUpdate) throw new Error("Character instance not found.");
 
-        if (!Array.isArray(charToUpdate.inventory.equipped)) {
-            charToUpdate.inventory.equipped = charToUpdate.inventory.equipped ? Object.values(charToUpdate.inventory.equipped) : [];
+            if (!Array.isArray(charToUpdate.inventory.equipped)) {
+                charToUpdate.inventory.equipped = charToUpdate.inventory.equipped ? Object.values(charToUpdate.inventory.equipped) : [];
+            }
+            if (!Array.isArray(charToUpdate.inventory.bag)) {
+                charToUpdate.inventory.bag = charToUpdate.inventory.bag ? Object.values(charToUpdate.inventory.bag) : [];
+            }
+
+            const item = charToUpdate.inventory.equipped[equipIndex];
+            if (!item) throw new Error("Item not found in equipment.");
+
+            charToUpdate.inventory.equipped.splice(equipIndex, 1);
+            charToUpdate.inventory.bag.push(item);
+
+            await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: charToUpdate.inventory });
+            const container = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
+            window.renderCharacterSheet(charToUpdate, container);
+        } catch (e) {
+            console.error(e);
+            alert("Erro ao guardar: " + e.message);
         }
-        if (!Array.isArray(charToUpdate.inventory.bag)) {
-            charToUpdate.inventory.bag = charToUpdate.inventory.bag ? Object.values(charToUpdate.inventory.bag) : [];
-        }
+    };
 
-        const item = charToUpdate.inventory.equipped[equipIndex];
-        if (!item) throw new Error("Item not found in equipment.");
-
-        charToUpdate.inventory.equipped.splice(equipIndex, 1);
-        charToUpdate.inventory.bag.push(item);
-
-        await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: charToUpdate.inventory });
-        const container = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
-        window.renderCharacterSheet(charToUpdate, container);
-    } catch (e) {
-        console.error(e);
-        alert("Erro ao guardar: " + e.message);
+    if (window.appState && window.appState.user && window.appState.user.role === 'gm' && typeof window.withGmLoading === 'function') {
+        window.withGmLoading(runUpdate);
+    } else {
+        runUpdate();
     }
 };
 
 window.dropItem = async function (charId, bagIndex) {
-    try {
-        let charToUpdate = window.currentPlayingCharacter && window.currentPlayingCharacter.id == charId ? window.currentPlayingCharacter : (window.chars ? window.chars.find(c => c.id == charId) : null);
-        if (!charToUpdate) throw new Error("Character instance not found.");
+    const runUpdate = async () => {
+        try {
+            let charToUpdate = window.currentPlayingCharacter && window.currentPlayingCharacter.id == charId ? window.currentPlayingCharacter : (window.chars ? window.chars.find(c => c.id == charId) : null);
+            if (!charToUpdate) throw new Error("Character instance not found.");
 
-        if (!confirm("Tem certeza que deseja descartar este item da mochila permanentemente?")) return;
+            if (!confirm("Tem certeza que deseja descartar este item da mochila permanentemente?")) return;
 
-        if (!Array.isArray(charToUpdate.inventory.bag)) {
-            charToUpdate.inventory.bag = charToUpdate.inventory.bag ? Object.values(charToUpdate.inventory.bag) : [];
+            if (!Array.isArray(charToUpdate.inventory.bag)) {
+                charToUpdate.inventory.bag = charToUpdate.inventory.bag ? Object.values(charToUpdate.inventory.bag) : [];
+            }
+            charToUpdate.inventory.bag.splice(bagIndex, 1);
+
+            await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: charToUpdate.inventory });
+            const container = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
+            window.renderCharacterSheet(charToUpdate, container);
+        } catch (e) {
+            console.error(e);
+            alert("Erro ao excluir: " + e.message);
         }
-        charToUpdate.inventory.bag.splice(bagIndex, 1);
+    };
 
-        await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: charToUpdate.inventory });
-        const container = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
-        window.renderCharacterSheet(charToUpdate, container);
-    } catch (e) {
-        console.error(e);
-        alert("Erro ao excluir: " + e.message);
+    if (window.appState && window.appState.user && window.appState.user.role === 'gm' && typeof window.withGmLoading === 'function') {
+        window.withGmLoading(runUpdate);
+    } else {
+        runUpdate();
     }
 };
 
 window.addItem = async function (charId) {
     const el = document.getElementById(`add-item-input-${charId}`);
     if (el && el.value.trim().length > 0) {
-        if (!window.currentPlayingCharacter.inventory.bag) window.currentPlayingCharacter.inventory.bag = [];
+        const runUpdate = async () => {
+            if (!window.currentPlayingCharacter.inventory.bag) window.currentPlayingCharacter.inventory.bag = [];
 
-        const fullItem = (window.DH_EQUIPMENT || []).find(e => e.name === el.value.trim());
-        if (fullItem) {
-            window.currentPlayingCharacter.inventory.bag.push({ id: fullItem.id, name: fullItem.name });
+            const fullItem = (window.DH_EQUIPMENT || []).find(e => e.name === el.value.trim());
+            if (fullItem) {
+                window.currentPlayingCharacter.inventory.bag.push({ id: fullItem.id, name: fullItem.name });
+            } else {
+                window.currentPlayingCharacter.inventory.bag.push(el.value.trim());
+            }
+
+            await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: window.currentPlayingCharacter.inventory });
+            const container = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
+            window.renderCharacterSheet(window.currentPlayingCharacter, container);
+            el.value = '';
+        };
+
+        if (window.appState && window.appState.user && window.appState.user.role === 'gm' && typeof window.withGmLoading === 'function') {
+            window.withGmLoading(runUpdate);
         } else {
-            window.currentPlayingCharacter.inventory.bag.push(el.value.trim());
+            runUpdate();
         }
-
-        await apiCall('character.php?action=update_inventory', 'POST', { id: charId, inventory: window.currentPlayingCharacter.inventory });
-        const container = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
-        window.renderCharacterSheet(window.currentPlayingCharacter, container);
-        el.value = '';
     }
 };
 
@@ -1402,57 +1445,67 @@ window.updateResource = async function (charId, field, valueDelta, maxLimit) {
     // 🔒 Bloqueia o polling para evitar race condition
     window.resourceUpdateInProgress = true;
 
-    // Optimistic Update
-    const container = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
-    const oldVal = window.currentPlayingCharacter[field];
+    // Helper to perform the actual update API call
+    const runUpdate = async () => {
+        // Optimistic Update
+        const container = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
+        const oldVal = window.currentPlayingCharacter[field];
 
-    // Simple update logic for local UI
-    let newVal = (window.currentPlayingCharacter[field] || 0) + valueDelta;
-    if (newVal < 0 && !field.includes('override')) newVal = 0;
-    if (maxLimit !== undefined && newVal > maxLimit) newVal = maxLimit;
+        // Simple update logic for local UI
+        let newVal = (window.currentPlayingCharacter[field] || 0) + valueDelta;
+        if (newVal < 0 && !field.includes('override')) newVal = 0;
+        if (maxLimit !== undefined && newVal > maxLimit) newVal = maxLimit;
 
-    window.currentPlayingCharacter[field] = newVal;
-    window.renderCharacterSheet(window.currentPlayingCharacter, container);
+        window.currentPlayingCharacter[field] = newVal;
+        if (container) window.renderCharacterSheet(window.currentPlayingCharacter, container);
 
-    try {
-        const res = await apiCall('character.php?action=update_resource', 'POST', {
-            character_id: charId,
-            field: field,
-            value: valueDelta,
-            max_limit: maxLimit
-        });
-        if (res.message) {
-            // Sincroniza o valor correto do banco
-            const charRefreshed = await apiCall(`character.php?action=get_player_character&id=${charId}`);
-            if (charRefreshed && !charRefreshed.error) {
-                window.currentPlayingCharacter = charRefreshed;
-                // Sincroniza também o gmState.characters para que o polling não reverta
-                if (window.gmState && window.gmState.characters) {
-                    const idx = window.gmState.characters.findIndex(c => Number(c.id) === Number(charId));
-                    if (idx !== -1) {
-                        window.gmState.characters[idx][field] = charRefreshed[field];
+        try {
+            const res = await apiCall('character.php?action=update_resource', 'POST', {
+                character_id: charId,
+                field: field,
+                value: valueDelta,
+                max_limit: maxLimit
+            });
+            if (res.message) {
+                // Sincroniza o valor correto do banco
+                const charRefreshed = await apiCall(`character.php?action=get_player_character&id=${charId}`);
+                if (charRefreshed && !charRefreshed.error) {
+                    window.currentPlayingCharacter = charRefreshed;
+                    // Sincroniza também o gmState.characters para que o polling não reverta
+                    if (window.gmState && window.gmState.characters) {
+                        const idx = window.gmState.characters.findIndex(c => Number(c.id) === Number(charId));
+                        if (idx !== -1) {
+                            window.gmState.characters[idx][field] = charRefreshed[field];
+                        }
                     }
+                    // Renderiza com o valor correto do banco
+                    const freshContainer = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
+                    if (freshContainer) window.renderCharacterSheet(charRefreshed, freshContainer);
                 }
-                // Renderiza com o valor correto do banco
+            } else if (res.error) {
+                alert(res.error);
+                // Rollback
+                window.currentPlayingCharacter[field] = oldVal;
                 const freshContainer = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
-                if (freshContainer) window.renderCharacterSheet(charRefreshed, freshContainer);
+                if (freshContainer) window.renderCharacterSheet(window.currentPlayingCharacter, freshContainer);
             }
-        } else if (res.error) {
-            alert(res.error);
+        } catch (e) {
+            alert('Erro ao atualizar recurso: ' + e.message);
             // Rollback
             window.currentPlayingCharacter[field] = oldVal;
             const freshContainer = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
             if (freshContainer) window.renderCharacterSheet(window.currentPlayingCharacter, freshContainer);
+        } finally {
+            // 🔓 Libera o polling após o update terminar
+            window.resourceUpdateInProgress = false;
         }
-    } catch (e) {
-        alert('Erro ao atualizar recurso: ' + e.message);
-        // Rollback
-        window.currentPlayingCharacter[field] = oldVal;
-        const freshContainer = document.getElementById('gm-char-sheet-container') || document.getElementById('player-dynamic-area');
-        if (freshContainer) window.renderCharacterSheet(window.currentPlayingCharacter, freshContainer);
-    } finally {
-        // 🔓 Libera o polling após o update terminar
-        window.resourceUpdateInProgress = false;
+    };
+
+    // If it's the GM triggering this on a player's sheet, use the loading wrapper
+    if (window.appState && window.appState.user && window.appState.user.role === 'gm' && typeof window.withGmLoading === 'function') {
+        window.withGmLoading(runUpdate);
+    } else {
+        runUpdate(); // Players don't have the global blocker yet
     }
 };
 
@@ -1482,19 +1535,18 @@ window.exportToPDF = function (charName) {
         jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
     };
 
-    html2pdf().set(opt).from(element).save().then(() => {
-        // Restore elements and remove CSS class after PDF generation
-        element.classList.remove('pdf-export-mode');
-        hideElements.forEach((el, index) => {
-            el.style.display = originalDisplays[index];
-        });
-    }).catch(err => {
-        console.error(err);
-        alert("Ocorreu um erro na geração do PDF.");
-        element.classList.remove('pdf-export-mode');
-        hideElements.forEach((el, index) => {
-            el.style.display = originalDisplays[index];
-        });
+    window.withGmLoading(async () => {
+        try {
+            await html2pdf().set(opt).from(element).save();
+        } catch (err) {
+            console.error(err);
+            alert("Ocorreu um erro na geração do PDF.");
+        } finally {
+            element.classList.remove('pdf-export-mode');
+            hideElements.forEach((el, index) => {
+                el.style.display = originalDisplays[index];
+            });
+        }
     });
 };
 
