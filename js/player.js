@@ -567,9 +567,13 @@ function step7HTML_Roleplay() {
 
 // STEP 8: REVIEW
 function step8HTML_Review() {
-    const clsEvasion = 8; // simplified fallback
-    const armObj = INVENTORY_ITEMS.armors[wizardState.armor];
-    const finalEvasion = clsEvasion + (armObj.evasion_mod || 0);
+    const selArmor = window.DH_EQUIPMENT.find(e => e.name === wizardState.armor);
+    const armObj = selArmor ? selArmor.data : { armor_base: 0, evasion_mod: 0 };
+    const finalEvasion = 10 + (wizardState.attributes['Agility'] || 0) + (armObj.evasion_mod || 0) + (wizardState.ancestry === 'Goblin' ? 1 : 0);
+    const finalArmor = (armObj.armor_base || 0) + (wizardState.ancestry === 'Clank' ? 1 : 0);
+
+    let ancestryData = window.DH_ANCESTRIES_DATA?.[wizardState.ancestry];
+    let communityData = window.DH_COMMUNITIES_DATA?.[wizardState.community];
 
     return `
         <h3>Passo Último: Assine o Manifesto</h3>
@@ -580,12 +584,14 @@ function step8HTML_Review() {
             <p><b>Herói:</b> <span style="color:#e78c3c">${wizardState.name || 'Sem Nome'}</span></p>
             <p><b>Caminho:</b> ${wizardState.class} - ${wizardState.subclass}</p>
             <p><b>Raízes:</b> ${wizardState.ancestry} da Comunidade ${wizardState.community}</p>
+            ${ancestryData ? `<div style="font-size:0.85rem; color:#e78c3c; margin-left:1rem; margin-bottom:0.2rem;">↳ <i>Traço: ${ancestryData.trait}</i></div>` : ''}
+            ${communityData ? `<div style="font-size:0.85rem; color:#3498db; margin-left:1rem; margin-bottom:0.5rem;">↳ <i>Traço: ${communityData.trait}</i></div>` : ''}
             <p><b>Bolsos Fechados:</b> 1 Ouro, Poção Menor de ${wizardState.potion}, ${wizardState.weapon}, ${wizardState.armor}</p>
             <p><b>Domínios da Mente (${wizardState.domain_cards.length}):</b> ${wizardState.domain_cards.join(' • ')}</p>
             <hr style="border-color:rgba(255,255,255,0.2); margin:1rem 0;">
             <p style="color:#3498db;"><b>Evasão Base:</b> ${finalEvasion} <span style="font-size:0.8rem; color:var(--text-muted);">(Aplicando ${armObj.evasion_mod} de peso da armadura)</span></p>
             <p style="color:#2ecc71;"><b>Pontos de Vida e Esperança:</b> Configurados pelos limites maximos do sistema para a classe e 2 Hope Iniciais!</p>
-            <p><b>Armadura Real (PA):</b> ${armObj.armor_base}</p>
+            <p><b>Armadura Real (PA):</b> ${finalArmor}</p>
         </div>
     `;
 }
@@ -715,7 +721,7 @@ async function submitCharacter() {
     const armorData = selArmor ? selArmor.data : { armor_base: 0, evasion_mod: 0 };
 
     // Basic evasão is 10 + Agility + Armor Mod in DH. Let's use 10 as base. 
-    const finalEvasion = 10 + (wizardState.attributes['Agility'] || 0) + (armorData.evasion_mod || 0);
+    const finalEvasion = 10 + (wizardState.attributes['Agility'] || 0) + (armorData.evasion_mod || 0) + (wizardState.ancestry === 'Goblin' ? 1 : 0);
 
     const inv = {
         gold: 1,
@@ -749,7 +755,7 @@ async function submitCharacter() {
         experiences: wizardState.experiences,
         evasion_base: finalEvasion,
         hp_base: (DH_CLASSES_DATA[wizardState.class]?.hp || 6) + (wizardState.ancestry === 'Gigante' ? 1 : 0),
-        armor_base: armorData.armor_base || 0,
+        armor_base: (armorData.armor_base || 0) + (wizardState.ancestry === 'Clank' ? 1 : 0),
         inventory: inv,
         cards: activeDomainCards,
         roleplay: wizardState.roleplay_answers, // <--- Passed to backend!
@@ -999,6 +1005,37 @@ function renderCharacterSheet(char, container) {
                 </div>
             </div>`;
 
+    // Process Heritage for Display
+    let heritageParts = (char.heritage || '').split(' / ');
+    let ancestryName = heritageParts[0] ? heritageParts[0].trim() : '';
+    let communityName = heritageParts[1] ? heritageParts[1].trim() : '';
+    
+    let ancestryData = window.DH_ANCESTRIES_DATA?.[ancestryName];
+    let communityData = window.DH_COMMUNITIES_DATA?.[communityName];
+    
+    let heritageHtml = '';
+    if (ancestryData || communityData) {
+        heritageHtml = `
+            <div class="glass-panel sheet-section" style="margin-top:2rem;">
+                <h3 style="color:var(--accent-purple);">Traços de Herança</h3>
+                ${ancestryData ? `
+                <div style="background:rgba(155,89,182,0.1); padding:0.8rem; border-left:3px solid #9b59b6; margin-bottom:1rem; border-radius:4px;">
+                    <div style="font-weight:bold; font-size:1rem; color:#9b59b6; margin-bottom:0.2rem;">Ancestralidade: ${ancestryName}</div>
+                    <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.3rem;"><i>${ancestryData.text}</i></div>
+                    <div style="font-size:0.9rem; color:#dcdcdc;"><b>Bônus:</b> ${ancestryData.trait}</div>
+                </div>
+                ` : ''}
+                ${communityData ? `
+                <div style="background:rgba(26,188,156,0.1); padding:0.8rem; border-left:3px solid #1abc9c; margin-bottom:1rem; border-radius:4px;">
+                    <div style="font-weight:bold; font-size:1rem; color:#1abc9c; margin-bottom:0.2rem;">Comunidade: ${communityName}</div>
+                    <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.3rem;"><i>${communityData.text}</i></div>
+                    <div style="font-size:0.9rem; color:#dcdcdc;"><b>Bônus:</b> ${communityData.trait}</div>
+                </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
     const levelUpBtnHtml = (char.can_level_up == 1)
         ? `<div style="background:linear-gradient(90deg, #f1c40f, #e67e22); padding:1rem; text-align:center; border-radius:8px; margin-bottom:1.5rem; cursor:pointer; box-shadow: 0 4px 15px rgba(241,196,15,0.4);" onclick="alert('Sistema de nível ainda em desenvolvimento.')">
             <h2 style="color:#2c3e50; margin:0; text-transform:uppercase; letter-spacing:2px; font-weight:bold;"><i class="fas fa-arrow-circle-up"></i> Subir de Nível</h2>
@@ -1167,6 +1204,8 @@ function renderCharacterSheet(char, container) {
                         <b style="color:#2ecc71;">Nível 8 (Maestria):</b> <span style="color:var(--text-muted);">(${char.level >= 8 ? 'Desbloqueado' : 'Bloqueado'})</span> ${DH_CLASSES_DATA[char.class]?.subclasses[char.subclass]?.maestria || ''}
                     </div>
                 </div>
+
+                ${heritageHtml}
 
                 <div class="glass-panel sheet-section" style="margin-top:2rem;">
                     <h3 style="color:#9b59b6;">Passado, Ligações e Segredos</h3>
